@@ -1,0 +1,36 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+
+import authRoutes from './routes/auth.js';
+import userRoutes from './routes/users.js';
+import masterDataRoutes from './routes/masterData.js';
+import reportRoutes from './routes/reports.js';
+import dashboardRoutes from './routes/dashboard.js';
+import excelRoutes from './routes/excel.js';
+import pdfRoutes from './routes/pdf.js';
+
+dotenv.config();
+
+const app = express();
+const port = process.env.PORT || 5000;
+
+app.use(cors());
+app.use(express.json());
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/master', masterDataRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/excel', excelRoutes);
+app.use('/api/pdf', pdfRoutes);
+
+app.get('/', (req, res) => {
+  res.send('MFMPL API is running');
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
