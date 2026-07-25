@@ -7,6 +7,9 @@ import DailyMillReport from './pages/DailyMillReport';
 import PadtalReport from './pages/PadtalReport';
 import AdminUsers from './pages/AdminUsers';
 import AdminMasterData from './pages/AdminMasterData';
+import AdminSettings from './pages/AdminSettings';
+import AdminAuditLog from './pages/AdminAuditLog';
+import AuditLogDetail from './pages/AuditLogDetail';
 import Layout from './components/Layout';
 
 const ProtectedRoute = ({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) => {
@@ -35,6 +38,21 @@ function AppRoutes() {
         <Route path="/master-data" element={
           <ProtectedRoute requireAdmin={true}>
             <AdminMasterData />
+          </ProtectedRoute>
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminSettings />
+          </ProtectedRoute>
+        } />
+        <Route path="/audit-log" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminAuditLog />
+          </ProtectedRoute>
+        } />
+        <Route path="/audit-log/:date" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AuditLogDetail />
           </ProtectedRoute>
         } />
       </Route>

@@ -67,4 +67,57 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// Compare key metrics between two date ranges (Period A vs Period B)
+router.get('/compare', async (req, res) => {
+  try {
+    const { startA, endA, startB, endB } = req.query;
+    if (!startA || !endA || !startB || !endB) {
+      return res.status(400).json({ error: 'startA, endA, startB, endB are all required' });
+    }
+
+    const computePeriod = async (start, end) => {
+      const reports = await db('daily_mill_reports').whereBetween('report_date', [start, end]);
+      const reportIds = reports.map(r => r.id);
+
+      const total_grinding = reports.reduce((sum, r) => sum + Number(r.mill_grinding || 0) + Number(r.chakki_grinding || 0), 0);
+      const total_purchase_value = reports.reduce((sum, r) => sum + Number(r.wheat_received || 0) * Number(r.wheat_purchase_rate || 0), 0);
+
+      const moistureVals = reports.map(r => Number(r.moisture_average_percent || 0)).filter(v => v > 0);
+      const avg_moisture = moistureVals.length > 0 ? moistureVals.reduce((a, b) => a + b, 0) / moistureVals.length : null;
+
+      let total_sales_value = 0;
+      let total_production_qty = 0;
+      if (reportIds.length > 0) {
+        const salesSum = await db('dmr_sales_report').whereIn('report_id', reportIds).sum('amount as total').first();
+        total_sales_value = Number(salesSum.total || 0);
+        const prodSum = await db('dmr_todays_production').whereIn('report_id', reportIds).sum('qtl as total').first();
+        total_production_qty = Number(prodSum.total || 0);
+      }
+
+      const padtalReports = await db('padtal_reports').whereBetween('report_date', [start, end]);
+      const padtalDiffs = padtalReports.map(p => Number(p.difference_percent || 0));
+      const avg_padtal_diff = padtalDiffs.length > 0 ? padtalDiffs.reduce((a, b) => a + b, 0) / padtalDiffs.length : null;
+
+      return {
+        total_grinding,
+        total_sales_value,
+        total_purchase_value,
+        avg_moisture,
+        total_production_qty,
+        avg_padtal_diff,
+        report_count: reports.length,
+        padtal_count: padtalReports.length,
+      };
+    };
+
+    const periodA = await computePeriod(startA, endA);
+    const periodB = await computePeriod(startB, endB);
+
+    res.json({ periodA, periodB });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

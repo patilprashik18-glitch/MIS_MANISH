@@ -8,12 +8,15 @@ export default function DailyMillReport() {
   const isAdmin = user?.role === 'admin';
   const [searchParams] = useSearchParams();
   
-  // Enforce current date for non-admins
+  // Mill Floor lands on today's report by default; Admin can deep-link to any date
   const today = new Date().toISOString().split('T')[0];
   const initDate = (isAdmin ? searchParams.get('date') : today) || today;
-  
+
   const [reportDate, setReportDate] = useState(initDate);
   const [isExistingReport, setIsExistingReport] = useState(false);
+  // Mill Floor can create/edit only today's report; once the date passes it's read-only.
+  // Admin is never locked. Server enforces this independently on save.
+  const isLocked = !isAdmin && reportDate !== today;
   const [products, setProducts] = useState<any[]>([]);
   
   // Parent Data State
@@ -22,7 +25,7 @@ export default function DailyMillReport() {
     bran_fine: 0, bran_super_delux: 0, bran_delux: 0, bran_coarse: 0, bran_chakki: 0,
     bran_load: 0, bran_bhushi: 0, bran_calcium: 0, bran_kanki: 0,
     moisture_maida_percent: 0, moisture_average_percent: 0, moisture_wheat_percent: 0,
-    wheat_opening: 0, wheat_received: 0,
+    wheat_opening: 0, wheat_received: 0, wheat_purchase_rate: 0,
     power_units: 0, power_rate_per_unit: 0
   });
 
@@ -43,6 +46,26 @@ export default function DailyMillReport() {
 
   const attendanceDepts = ['ADMIN', 'GENERAL', 'MILL STAFF', 'SECURITY', 'PACKING', 'LOADING', 'UNLOADING', 'BARDANA'];
   const [attendance, setAttendance] = useState<any[]>(attendanceDepts.map(dept => ({ department: dept, total: 0, present: 0, absent: 0 })));
+
+  const [moistureMin, setMoistureMin] = useState<number | null>(null);
+  const [moistureMax, setMoistureMax] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get('/settings').then(res => {
+      const min = res.data.find((s: any) => s.key === 'moisture_min');
+      const max = res.data.find((s: any) => s.key === 'moisture_max');
+      if (min) setMoistureMin(parseFloat(min.value));
+      if (max) setMoistureMax(parseFloat(max.value));
+    }).catch(err => console.error(err));
+  }, []);
+
+  // Global average across the filled-in per-flour-type readings (per-flour-type thresholds come later)
+  const filledMoisture = moisture.filter(m => m.average > 0);
+  const avgMoisture = filledMoisture.length > 0
+    ? filledMoisture.reduce((sum, m) => sum + m.average, 0) / filledMoisture.length
+    : 0;
+  const isMoistureOutOfRange = moistureMin !== null && moistureMax !== null && filledMoisture.length > 0 &&
+    (avgMoisture < moistureMin || avgMoisture > moistureMax);
 
   useEffect(() => {
     Promise.all([api.get('/master/products'), api.get('/master/salesmen')]).then(([pRes, sRes]) => {
@@ -141,7 +164,7 @@ export default function DailyMillReport() {
                 bran_fine: r.bran_fine, bran_super_delux: r.bran_super_delux, bran_delux: r.bran_delux, bran_coarse: r.bran_coarse, bran_chakki: r.bran_chakki,
                 bran_load: r.bran_load, bran_bhushi: r.bran_bhushi, bran_calcium: r.bran_calcium, bran_kanki: r.bran_kanki,
                 moisture_maida_percent: r.moisture_maida_percent, moisture_average_percent: r.moisture_average_percent, moisture_wheat_percent: r.moisture_wheat_percent,
-                wheat_opening: r.wheat_opening, wheat_received: r.wheat_received,
+                wheat_opening: r.wheat_opening, wheat_received: r.wheat_received, wheat_purchase_rate: r.wheat_purchase_rate,
                 power_units: r.power_units, power_rate_per_unit: r.power_rate_per_unit
               });
             }
@@ -206,7 +229,7 @@ export default function DailyMillReport() {
     try {
       await api.post('/reports/daily', {
         report_date: reportDate,
-        parentData,
+        parentData: { ...parentData, moisture_average_percent: avgMoisture },
         lab_report: labReport,
         finish_stock: finishStock.filter(i => i.katta > 0 || i.qtl > 0),
         sales_report: salesReport.filter(i => i.katta > 0 || i.qtl > 0 || i.amount > 0),
@@ -237,18 +260,6 @@ export default function DailyMillReport() {
     } catch (err) {
       console.error(err);
       alert('Failed to download PDF. Ensure the report is saved first.');
-    }
-  };
-
-  const handleEmailReport = async () => {
-    const emailTo = prompt("Enter email address to send report to:", "admin@manishflourmills.com");
-    if (!emailTo) return;
-    try {
-      await api.post(`/pdf/email/${reportDate}`, { emailTo });
-      alert(`Email sent successfully to ${emailTo}`);
-    } catch (err) {
-      console.error(err);
-      alert('Failed to send email. Ensure the report is saved first.');
     }
   };
 
@@ -288,34 +299,34 @@ export default function DailyMillReport() {
           <button onClick={handleDownloadPDF} className="bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700 text-sm font-medium">
             Download PDF
           </button>
-          <button onClick={handleEmailReport} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 text-sm font-medium">
+          <button disabled title="Coming soon - email delivery isn't configured yet" className="bg-gray-300 text-gray-500 px-4 py-2 rounded shadow text-sm font-medium cursor-not-allowed">
             Email Report
           </button>
-          <label className="bg-green-600 text-white px-4 py-2 rounded shadow cursor-pointer hover:bg-green-700 text-sm font-medium">
+          <label className={`px-4 py-2 rounded shadow text-sm font-medium ${isLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white cursor-pointer hover:bg-green-700'}`}>
             Import Excel
-            <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} />
+            <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isLocked} />
           </label>
           <div>
             <label className="mr-2 font-medium">Date:</label>
-            <input 
-              type="date" 
-              value={reportDate} 
-              onChange={(e) => setReportDate(e.target.value)} 
-              disabled={!isAdmin}
-              className={`p-2 border rounded ${!isAdmin ? 'bg-gray-200 cursor-not-allowed' : ''}`} 
+            <input
+              type="date"
+              value={reportDate}
+              onChange={(e) => setReportDate(e.target.value)}
+              className="p-2 border rounded"
             />
           </div>
         </div>
       </div>
 
-      {!isAdmin && isExistingReport && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6">
-          <strong className="font-bold">Access Denied! </strong>
-          <span className="block sm:inline">A report for {reportDate} already exists. Only administrators can edit existing reports.</span>
+      {isLocked && (
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded relative mb-6">
+          <strong className="font-bold">Read-only. </strong>
+          <span className="block sm:inline">This report is for a past date. Only administrators can create or edit past reports.</span>
         </div>
       )}
 
       <form onSubmit={handleSave}>
+        <fieldset disabled={isLocked} className="contents">
         
         {/* GRINDING & BRAN SUMMARY */}
         <div className="bg-white p-6 rounded-xl shadow-sm mb-6">
@@ -377,7 +388,15 @@ export default function DailyMillReport() {
         {/* MOISTURE & LAB REPORT */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div className="bg-white p-6 rounded-xl shadow-sm">
-            <h2 className="text-lg font-semibold mb-4 text-brand">Moisture Report</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-brand">Moisture Report</h2>
+              {filledMoisture.length > 0 && (
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${isMoistureOutOfRange ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                  Avg {avgMoisture.toFixed(2)}% {isMoistureOutOfRange ? '- Out of range' : ''}
+                  {moistureMin !== null && moistureMax !== null ? ` (normal: ${moistureMin}-${moistureMax}%)` : ''}
+                </span>
+              )}
+            </div>
             <table className="w-full text-left text-sm">
               <thead><tr className="bg-gray-50 border-b"><th className="p-2">Item</th><th className="p-2">Maida 1</th><th className="p-2">Maida 2</th><th className="p-2">Average</th></tr></thead>
               <tbody>
@@ -434,6 +453,7 @@ export default function DailyMillReport() {
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs text-gray-500">Opening Balance</label><input type="number" value={parentData.wheat_opening||''} onChange={e => setParentData({...parentData, wheat_opening: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
                         <div><label className="block text-xs text-gray-500">Received Today</label><input type="number" value={parentData.wheat_received||''} onChange={e => setParentData({...parentData, wheat_received: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
+                        <div><label className="block text-xs text-gray-500">Purchase Rate (₹)</label><input type="number" value={parentData.wheat_purchase_rate||''} onChange={e => setParentData({...parentData, wheat_purchase_rate: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
                     </div>
                 </div>
             </div>
@@ -441,14 +461,15 @@ export default function DailyMillReport() {
 
         {/* SUBMIT BUTTON */}
         <div className="flex justify-end mt-8">
-          <button 
-             type="submit" 
-             disabled={!isAdmin && isExistingReport}
-             className={`px-8 py-3 rounded-lg text-white font-bold text-lg shadow-md transition-colors ${(!isAdmin && isExistingReport) ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand hover:bg-brand-dark'}`}
+          <button
+             type="submit"
+             disabled={isLocked}
+             className={`px-8 py-3 rounded-lg text-white font-bold text-lg shadow-md transition-colors ${isLocked ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand hover:bg-brand-dark'}`}
           >
             {isExistingReport ? 'Update Report' : 'Save Report'}
           </button>
         </div>
+        </fieldset>
       </form>
     </div>
   );

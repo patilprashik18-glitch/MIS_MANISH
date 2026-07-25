@@ -9,6 +9,8 @@ import reportRoutes from './routes/reports.js';
 import dashboardRoutes from './routes/dashboard.js';
 import excelRoutes from './routes/excel.js';
 import pdfRoutes from './routes/pdf.js';
+import settingsRoutes from './routes/settings.js';
+import auditLogRoutes from './routes/auditLog.js';
 
 dotenv.config();
 
@@ -26,6 +28,8 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/excel', excelRoutes);
 app.use('/api/pdf', pdfRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/audit-log', auditLogRoutes);
 
 app.get('/', (req, res) => {
   res.send('MFMPL API is running');

@@ -20,6 +20,8 @@ export default function Layout() {
   if (user?.role === 'admin') {
     navLinks.push({ name: 'Users', path: '/users' });
     navLinks.push({ name: 'Master Data', path: '/master-data' });
+    navLinks.push({ name: 'Alert Thresholds', path: '/settings' });
+    navLinks.push({ name: 'Audit Trail', path: '/audit-log' });
   }
 
   return (
