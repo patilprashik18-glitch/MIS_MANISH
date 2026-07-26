@@ -50,4 +50,31 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Update an existing user - password is optional (blank/omitted leaves it unchanged)
+router.put('/:id', async (req, res) => {
+  try {
+    const { email, role, password } = req.body;
+    if (!email || !role) {
+      return res.status(400).json({ error: 'Email and role are required' });
+    }
+
+    const updateData = { email, role };
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password_hash = await bcrypt.hash(password, salt);
+    }
+
+    const [updated] = await db('users').where({ id: req.params.id }).update(updateData).returning(['id', 'email', 'role']);
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    if (error.code === '23505' || error.code === 'SQLITE_CONSTRAINT') {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
