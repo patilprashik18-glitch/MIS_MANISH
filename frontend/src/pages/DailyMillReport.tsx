@@ -301,10 +301,10 @@ export default function DailyMillReport() {
   };
 
   const renderGrid = (title: string, state: any[], setState: any, hasAmount: boolean = false) => (
-    <div className="bg-white p-6 rounded-xl shadow-sm mb-6 flex-1">
-      <h2 className="text-lg font-semibold mb-4 text-brand">{title}</h2>
-      <div className="max-h-96 overflow-y-auto">
-        <table className="w-full text-left text-sm">
+    <div className="bg-white p-6 rounded-xl shadow-sm mb-6 flex-1 min-w-[280px]">
+      <h2 className="text-lg font-semibold mb-4 text-brand font-headline-md">{title}</h2>
+      <div className="max-h-96 overflow-x-auto w-full max-w-full">
+        <table className="w-full text-left text-sm min-w-[400px]">
           <thead>
             <tr className="bg-gray-50 border-b">
               <th className="p-2">Product</th>
@@ -316,7 +316,7 @@ export default function DailyMillReport() {
           <tbody>
             {state.map((item, index) => (
               <tr key={item.product_id} className="border-b last:border-0 hover:bg-gray-50">
-                <td className="p-2 truncate max-w-[150px]">{item.name}</td>
+                <td className="p-2 truncate max-w-[150px] font-medium">{item.name}</td>
                 <td className="p-2"><input type="number" step="0.01" value={item.katta || ''} onChange={e => { const n = [...state]; n[index].katta = parseFloat(e.target.value) || 0; setState(n); }} className="w-full p-1 border rounded" /></td>
                 <td className="p-2"><input type="number" step="0.01" value={item.qtl || ''} onChange={e => { const n = [...state]; n[index].qtl = parseFloat(e.target.value) || 0; setState(n); }} className="w-full p-1 border rounded" /></td>
                 {hasAmount && <td className="p-2"><input type="number" step="0.01" value={item.amount || ''} onChange={e => { const n = [...state]; n[index].amount = parseFloat(e.target.value) || 0; setState(n); }} className="w-full p-1 border rounded" /></td>}
@@ -329,27 +329,27 @@ export default function DailyMillReport() {
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto pb-32">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Daily Mill Report</h1>
-        <div className="flex items-center gap-4">
-          <button onClick={handleDownloadPDF} className="bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700 text-sm font-medium">
+    <div className="max-w-7xl mx-auto pb-32 overflow-x-hidden w-full max-w-full">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold font-headline-md">Daily Mill Report</h1>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+          <button onClick={handleDownloadPDF} className="bg-red-600 text-white px-3 sm:px-4 py-2 rounded shadow hover:bg-red-700 text-xs sm:text-sm font-medium">
             Download PDF
           </button>
-          <button disabled title="Coming soon - email delivery isn't configured yet" className="bg-gray-300 text-gray-500 px-4 py-2 rounded shadow text-sm font-medium cursor-not-allowed">
+          <button disabled title="Coming soon - email delivery isn't configured yet" className="bg-gray-300 text-gray-500 px-3 sm:px-4 py-2 rounded shadow text-xs sm:text-sm font-medium cursor-not-allowed">
             Email Report
           </button>
-          <label className={`px-4 py-2 rounded shadow text-sm font-medium ${isLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white cursor-pointer hover:bg-green-700'}`}>
+          <label className={`px-3 sm:px-4 py-2 rounded shadow text-xs sm:text-sm font-medium ${isLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white cursor-pointer hover:bg-green-700'}`}>
             Import Excel
             <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isLocked} />
           </label>
-          <div>
-            <label className="mr-2 font-medium">Date:</label>
+          <div className="flex items-center">
+            <label className="mr-2 font-medium text-xs sm:text-sm">Date:</label>
             <input
               type="date"
               value={reportDate}
               onChange={(e) => setReportDate(e.target.value)}
-              className="p-2 border rounded"
+              className="p-1.5 sm:p-2 border rounded text-xs sm:text-sm"
             />
           </div>
         </div>
@@ -367,8 +367,8 @@ export default function DailyMillReport() {
         
         {/* GRINDING & BRAN SUMMARY */}
         <div className="bg-white p-6 rounded-xl shadow-sm mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-brand">Grinding & Bran Production</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <h2 className="text-lg font-semibold mb-4 text-brand font-headline-md">Grinding & Bran Production</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div><label className="block text-xs text-gray-500">Mill Grinding (मिल पिसाई)</label><input type="number" value={parentData.mill_grinding} onChange={e => setParentData({...parentData, mill_grinding: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" /></div>
             <div><label className="block text-xs text-gray-500">Chakki Grinding (चक्की पिसाई)</label><input type="number" value={parentData.chakki_grinding} onChange={e => setParentData({...parentData, chakki_grinding: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" /></div>
             <div><label className="block text-xs text-gray-500">Fine Bran (फाइन ब्रान)</label><input type="number" value={parentData.bran_fine} onChange={e => setParentData({...parentData, bran_fine: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" /></div>
@@ -395,9 +395,9 @@ export default function DailyMillReport() {
 
         {/* SALESMAN SALES GRID */}
         <div className="bg-white p-6 rounded-xl shadow-sm mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-brand">Salesman Wise Sales</h2>
-          <div className="max-h-96 overflow-y-auto">
-            <table className="w-full text-left text-sm">
+          <h2 className="text-lg font-semibold mb-4 text-brand font-headline-md">Salesman Wise Sales</h2>
+          <div className="max-h-96 overflow-auto">
+            <table className="w-full text-left text-sm min-w-[500px]">
               <thead>
                 <tr className="bg-gray-50 border-b">
                   <th className="p-2">Salesman</th>
@@ -434,18 +434,20 @@ export default function DailyMillReport() {
                 </span>
               )}
             </div>
-            <table className="w-full text-left text-sm">
-              <thead><tr className="bg-gray-50 border-b"><th className="p-2">Item</th><th className="p-2">Maida 1</th><th className="p-2">Maida 2</th><th className="p-2">Average</th></tr></thead>
-              <tbody>
-                {moisture.map((m, idx) => (
-                  <tr key={m.item_name} className="border-b last:border-0"><td className="p-2 font-medium">{m.item_name}</td>
-                    <td><input type="number" step="0.01" value={m.maida_1||''} onChange={e=>{const nm=[...moisture]; nm[idx].maida_1 = parseFloat(e.target.value)||0; setMoisture(nm);}} className="w-full p-1 border rounded"/></td>
-                    <td><input type="number" step="0.01" value={m.maida_2||''} onChange={e=>{const nm=[...moisture]; nm[idx].maida_2 = parseFloat(e.target.value)||0; setMoisture(nm);}} className="w-full p-1 border rounded"/></td>
-                    <td><input type="number" step="0.01" value={m.average||''} onChange={e=>{const nm=[...moisture]; nm[idx].average = parseFloat(e.target.value)||0; setMoisture(nm);}} className="w-full p-1 border rounded"/></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto w-full max-w-full">
+              <table className="w-full text-left text-sm min-w-[380px]">
+                <thead><tr className="bg-gray-50 border-b"><th className="p-2">Item</th><th className="p-2">Maida 1</th><th className="p-2">Maida 2</th><th className="p-2">Average</th></tr></thead>
+                <tbody>
+                  {moisture.map((m, idx) => (
+                    <tr key={m.item_name} className="border-b last:border-0"><td className="p-2 font-medium">{m.item_name}</td>
+                      <td><input type="number" step="0.01" value={m.maida_1||''} onChange={e=>{const nm=[...moisture]; nm[idx].maida_1 = parseFloat(e.target.value)||0; setMoisture(nm);}} className="w-full p-1 border rounded"/></td>
+                      <td><input type="number" step="0.01" value={m.maida_2||''} onChange={e=>{const nm=[...moisture]; nm[idx].maida_2 = parseFloat(e.target.value)||0; setMoisture(nm);}} className="w-full p-1 border rounded"/></td>
+                      <td><input type="number" step="0.01" value={m.average||''} onChange={e=>{const nm=[...moisture]; nm[idx].average = parseFloat(e.target.value)||0; setMoisture(nm);}} className="w-full p-1 border rounded"/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
           
           <div className="bg-white p-6 rounded-xl shadow-sm">
@@ -462,20 +464,22 @@ export default function DailyMillReport() {
 
         {/* OTHER SECTIONS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm">
+            <div className="bg-white p-6 rounded-xl shadow-sm overflow-hidden">
                 <h2 className="text-lg font-semibold mb-4 text-brand">Attendance</h2>
-                <table className="w-full text-left text-sm">
-                    <thead><tr className="bg-gray-50 border-b"><th className="p-2">Dept</th><th className="p-2">Total</th><th className="p-2">Present</th><th className="p-2">Absent</th></tr></thead>
-                    <tbody>
-                        {attendance.map((a, idx) => (
-                            <tr key={a.department} className="border-b last:border-0"><td className="p-2 font-medium text-xs">{a.department}</td>
-                                <td><input type="number" value={a.total||''} onChange={e=>{const nm=[...attendance]; nm[idx].total = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
-                                <td><input type="number" value={a.present||''} onChange={e=>{const nm=[...attendance]; nm[idx].present = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
-                                <td><input type="number" value={a.absent||''} onChange={e=>{const nm=[...attendance]; nm[idx].absent = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="overflow-x-auto w-full max-w-full">
+                  <table className="w-full text-left text-sm min-w-[380px]">
+                      <thead><tr className="bg-gray-50 border-b"><th className="p-2">Dept</th><th className="p-2">Total</th><th className="p-2">Present</th><th className="p-2">Absent</th></tr></thead>
+                      <tbody>
+                          {attendance.map((a, idx) => (
+                              <tr key={a.department} className="border-b last:border-0"><td className="p-2 font-medium text-xs">{a.department}</td>
+                                  <td><input type="number" value={a.total||''} onChange={e=>{const nm=[...attendance]; nm[idx].total = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
+                                  <td><input type="number" value={a.present||''} onChange={e=>{const nm=[...attendance]; nm[idx].present = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
+                                  <td><input type="number" value={a.absent||''} onChange={e=>{const nm=[...attendance]; nm[idx].absent = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+                </div>
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm">

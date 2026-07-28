@@ -133,16 +133,16 @@ export default function PadtalReport() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Padtal Report</h1>
+    <div className="max-w-5xl mx-auto pb-20 overflow-x-hidden w-full max-w-full">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold font-headline-md">Padtal Report</h1>
         <div>
-          <label className="mr-2 font-medium">Date:</label>
+          <label className="mr-2 font-medium text-xs sm:text-sm">Date:</label>
           <input 
             type="date" 
             value={reportDate} 
             onChange={(e) => setReportDate(e.target.value)} 
-            className="p-2 border rounded"
+            className="p-1.5 sm:p-2 border rounded text-xs sm:text-sm"
           />
         </div>
       </div>
@@ -157,17 +157,17 @@ export default function PadtalReport() {
       <form onSubmit={handleSave}>
         <fieldset disabled={isLocked} className="contents">
         {/* Wheat Rate Input */}
-        <div className="bg-white p-6 rounded-xl shadow-sm mb-6 flex gap-4 items-center">
-          <label className="font-semibold">Wheat Rate (₹):</label>
-          <input type="number" step="0.01" value={wheatRate || ''} onChange={e => setWheatRate(parseFloat(e.target.value) || 0)} className="p-2 border rounded w-48 focus:ring-brand focus:border-brand" />
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm mb-6 flex flex-wrap gap-4 items-center">
+          <label className="font-semibold text-xs sm:text-sm">Wheat Rate (₹):</label>
+          <input type="number" step="0.01" value={wheatRate || ''} onChange={e => setWheatRate(parseFloat(e.target.value) || 0)} className="p-1.5 sm:p-2 border rounded w-40 sm:w-48 focus:ring-brand focus:border-brand text-xs sm:text-sm" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Yield Detail */}
-          <div className="bg-white p-6 rounded-xl shadow-sm">
-            <h2 className="text-lg font-semibold mb-4 text-brand">Yield Detail</h2>
-            <div className="max-h-96 overflow-y-auto">
-              <table className="w-full text-left text-sm">
+          <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm overflow-hidden">
+            <h2 className="text-lg font-semibold mb-4 text-brand font-headline-md">Yield Detail</h2>
+            <div className="max-h-96 overflow-x-auto w-full max-w-full">
+              <table className="w-full text-left text-sm min-w-[350px]">
                 <thead>
                   <tr className="bg-gray-50 border-b">
                     <th className="p-2">Product</th>

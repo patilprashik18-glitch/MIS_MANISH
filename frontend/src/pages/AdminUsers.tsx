@@ -87,7 +87,7 @@ export default function AdminUsers() {
         <h2 className="text-lg font-semibold mb-4">Create New User</h2>
         {error && <div className="text-red-600 mb-4">{error}</div>}
         {success && <div className="text-green-600 mb-4">{success}</div>}
-        <form onSubmit={handleCreateUser} className="flex gap-4 items-end">
+        <form onSubmit={handleCreateUser} className="flex flex-col sm:flex-row gap-4 sm:items-end">
           <div className="flex-1">
             <label className="block text-sm text-gray-600 mb-1">Email</label>
             <input type="email" required className="w-full p-2 border rounded" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
@@ -103,12 +103,12 @@ export default function AdminUsers() {
               <option value="admin">Admin</option>
             </select>
           </div>
-          <button type="submit" className="bg-brand text-white px-6 py-2 rounded hover:bg-brand-dark">Create User</button>
+          <button type="submit" className="bg-brand text-white px-6 py-2 rounded hover:bg-brand-dark h-fit">Create User</button>
         </form>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-left">
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto w-full max-w-full">
+        <table className="w-full text-left min-w-[650px]">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="p-4">ID</th>

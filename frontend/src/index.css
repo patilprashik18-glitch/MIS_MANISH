@@ -4,6 +4,18 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900;
+    background-color: #faf8ff;
+    color: #131b2e;
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.04);
   }
 }

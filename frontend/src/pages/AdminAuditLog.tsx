@@ -21,12 +21,12 @@ export default function AdminAuditLog() {
   }, []);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Audit Trail</h1>
-      <p className="text-gray-500 mb-6">Dates with recorded changes. Click a date to see the full log.</p>
+    <div className="max-w-4xl mx-auto overflow-x-hidden w-full max-w-full">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-2 font-headline-md">Audit Trail</h1>
+      <p className="text-gray-500 mb-6 text-sm">Dates with recorded changes. Click a date to see the full log.</p>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto w-full max-w-full">
+        <table className="w-full text-left text-sm min-w-[500px]">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="p-4">Report Date</th>

@@ -43,12 +43,12 @@ export default function AuditLogDetail() {
   const reportTypeLabel = (t: string) => t === 'daily_mill_report' ? 'Daily Mill Report' : t === 'padtal_report' ? 'Padtal Report' : t;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto overflow-x-hidden w-full max-w-full">
       <Link to="/audit-log" className="text-brand hover:underline text-sm font-medium mb-4 inline-block">&larr; Back to all dates</Link>
-      <h1 className="text-2xl font-bold mb-6">Changes on {date ? new Date(date).toLocaleDateString() : ''}</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold mb-6 font-headline-md">Changes on {date ? new Date(date).toLocaleDateString() : ''}</h1>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
           <div>
             <label className="block text-sm text-gray-600 mb-1">Changed By (email)</label>
             <input type="text" className="w-full p-2 border rounded" value={userFilter} onChange={e => setUserFilter(e.target.value)} placeholder="e.g. floor@mfmpl.com" />
@@ -63,8 +63,8 @@ export default function AuditLogDetail() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto w-full max-w-full">
+        <table className="w-full text-left text-sm min-w-[650px]">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="p-3">When</th>

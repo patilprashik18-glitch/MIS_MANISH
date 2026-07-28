@@ -86,7 +86,7 @@ export default function AdminMasterData() {
         {error && <div className="text-red-600 mb-4">{error}</div>}
         {success && <div className="text-green-600 mb-4">{success}</div>}
         
-        <form onSubmit={handleCreate} className="flex gap-4 items-end max-w-md">
+        <form onSubmit={handleCreate} className="flex flex-col sm:flex-row gap-4 sm:items-end max-w-md">
           <div className="flex-1">
             <label className="block text-sm text-gray-600 mb-1">Name</label>
             <input 
@@ -97,12 +97,12 @@ export default function AdminMasterData() {
               onChange={e => setNewItemName(e.target.value)} 
             />
           </div>
-          <button type="submit" className="bg-brand text-white px-6 py-2 rounded hover:bg-brand-dark">Add</button>
+          <button type="submit" className="bg-brand text-white px-6 py-2 rounded hover:bg-brand-dark h-fit">Add</button>
         </form>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-left">
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto w-full max-w-full">
+        <table className="w-full text-left min-w-[450px]">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="p-4 w-20">ID</th>
