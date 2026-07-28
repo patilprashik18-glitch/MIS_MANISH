@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import db from './db.js';
 
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
@@ -35,6 +36,16 @@ app.get('/', (req, res) => {
   res.send('MFMPL API is running');
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+db.migrate.latest()
+  .then(() => {
+    console.log('Database migrations verified successfully');
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Migration error on startup:', err);
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
+  });

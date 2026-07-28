@@ -1,13 +1,24 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
 export default function PadtalReport() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [searchParams] = useSearchParams();
   const today = new Date().toISOString().split('T')[0];
+  const initDate = (isAdmin ? searchParams.get('date') : today) || today;
 
-  const [reportDate, setReportDate] = useState(today);
+  const [reportDate, setReportDate] = useState(initDate);
+
+  useEffect(() => {
+    const d = searchParams.get('date');
+    if (d && isAdmin && d !== reportDate) {
+      setReportDate(d);
+    }
+  }, [searchParams, isAdmin]);
+
   const [wheatRate, setWheatRate] = useState(0);
   const [yieldDetail, setYieldDetail] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);

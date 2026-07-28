@@ -246,7 +246,7 @@ export default function Dashboard() {
       <div className="bg-white p-6 rounded-xl shadow-sm">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-brand">Recent Reports</h2>
-          <Link to="/report/daily" className="text-brand hover:underline text-sm font-medium">+ New Report</Link>
+          <Link to="/daily-mill" className="text-brand hover:underline text-sm font-medium">+ New Report</Link>
         </div>
         <table className="w-full text-left text-sm">
           <thead>
@@ -273,7 +273,7 @@ export default function Dashboard() {
                 </td>
                 <td className="p-3 text-gray-500">{new Date(report.created_at).toLocaleString()}</td>
                 <td className="p-3 text-right space-x-4">
-                  {isAdmin && <Link to={`/report/daily?date=${report.report_date.split('T')[0]}`} className="text-blue-600 hover:underline text-sm font-medium">Edit</Link>}
+                  {isAdmin && <Link to={`/daily-mill?date=${report.report_date.split('T')[0]}`} className="text-blue-600 hover:underline text-sm font-medium">Edit</Link>}
                   <button onClick={() => handleDownloadExcel(report.report_date.split('T')[0])} className="text-green-600 hover:underline text-sm font-medium">Download Excel</button>
                 </td>
               </tr>

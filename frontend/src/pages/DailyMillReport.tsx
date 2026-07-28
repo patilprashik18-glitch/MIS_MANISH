@@ -205,6 +205,36 @@ export default function DailyMillReport() {
                });
                setSalesmanSales(newSalesmanSales);
             }
+
+            if(r.attendance && r.attendance.length > 0) {
+               setAttendance(prev => {
+                  const newAtt = [...prev];
+                  r.attendance.forEach((dbItem: any) => {
+                     const idx = newAtt.findIndex(a => a.department.toLowerCase() === dbItem.department.toLowerCase());
+                     if(idx !== -1) {
+                        newAtt[idx].total = dbItem.total;
+                        newAtt[idx].present = dbItem.present;
+                        newAtt[idx].absent = dbItem.absent;
+                     }
+                  });
+                  return newAtt;
+               });
+            }
+
+            if(r.moisture && r.moisture.length > 0) {
+               setMoisture(prev => {
+                  const newM = [...prev];
+                  r.moisture.forEach((dbItem: any) => {
+                     const idx = newM.findIndex(m => m.item_name.toLowerCase() === dbItem.item_name.toLowerCase());
+                     if(idx !== -1) {
+                        newM[idx].maida_1 = dbItem.maida_1;
+                        newM[idx].maida_2 = dbItem.maida_2;
+                        newM[idx].average = dbItem.average;
+                     }
+                  });
+                  return newM;
+               });
+            }
           }
         } catch (err: any) {
           if(err.response && err.response.status === 404) {
@@ -218,6 +248,13 @@ export default function DailyMillReport() {
          fetchReport();
       }
     }, [reportDate, products]);
+
+  useEffect(() => {
+    const d = searchParams.get('date');
+    if (d && isAdmin && d !== reportDate) {
+      setReportDate(d);
+    }
+  }, [searchParams, isAdmin]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
