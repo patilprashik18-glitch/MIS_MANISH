@@ -240,8 +240,17 @@ export default function PadtalReport() {
           </SectionBox>
         </div>
 
-        <div className="flex justify-end">
-          <button type="submit" disabled={isLocked} className={`px-8 py-3 rounded-xl shadow text-lg font-medium text-white ${isLocked ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand hover:bg-brand-dark'}`}>
+        <div className="flex justify-end mt-8">
+          <button
+            type="submit"
+            disabled={isLocked}
+            className={`inline-flex items-center gap-2 px-8 py-3 rounded-xl text-white font-bold text-base sm:text-lg shadow-lg transition-all ${
+              isLocked
+                ? 'bg-surface-container-high text-on-surface-variant/50 border border-outline-variant/30 cursor-not-allowed'
+                : 'bg-primary hover:bg-primary/90 hover:shadow-xl active:scale-95'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">save</span>
             Save Padtal Report
           </button>
         </div>

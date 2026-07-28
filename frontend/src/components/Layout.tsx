@@ -86,11 +86,6 @@ export default function Layout() {
         </nav>
 
         <div className="px-6 mt-auto pt-4">
-          <div className="p-4 rounded-xl bg-primary-container text-white flex flex-col gap-2 shadow-lg mb-4">
-            <span className="material-symbols-outlined text-white">auto_awesome</span>
-            <p className="font-label-sm font-bold text-sm">MillOps AI</p>
-            <p className="text-[11px] opacity-90">Daily production & quality analytics ready.</p>
-          </div>
           <div className="p-3 border-t border-outline-variant/30 flex flex-col space-y-2">
             <div className="text-xs text-on-surface-variant font-medium truncate">{user?.email}</div>
             <button

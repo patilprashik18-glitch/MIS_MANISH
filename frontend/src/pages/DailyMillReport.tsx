@@ -336,24 +336,41 @@ export default function DailyMillReport() {
     <div className="max-w-7xl mx-auto pb-32 overflow-x-hidden w-full max-w-full">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold font-headline-md">Daily Mill Report</h1>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-          <button onClick={handleDownloadPDF} className="bg-red-600 text-white px-3 sm:px-4 py-2 rounded shadow hover:bg-red-700 text-xs sm:text-sm font-medium">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          <button
+            onClick={handleDownloadPDF}
+            className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-xl font-bold text-xs sm:text-sm shadow-md hover:bg-primary/90 hover:shadow-lg transition-all border border-primary/20 active:scale-95"
+          >
+            <span className="material-symbols-outlined text-base">picture_as_pdf</span>
             Download PDF
           </button>
-          <button disabled title="Coming soon - email delivery isn't configured yet" className="bg-gray-300 text-gray-500 px-3 sm:px-4 py-2 rounded shadow text-xs sm:text-sm font-medium cursor-not-allowed">
+          <button
+            disabled
+            title="Coming soon - email delivery isn't configured yet"
+            className="flex items-center gap-1.5 px-4 py-2 bg-surface-container-high text-on-surface-variant/50 rounded-xl font-bold text-xs sm:text-sm border border-outline-variant/30 cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-base">mail</span>
             Email Report
           </button>
-          <label className={`px-3 sm:px-4 py-2 rounded shadow text-xs sm:text-sm font-medium ${isLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white cursor-pointer hover:bg-green-700'}`}>
+          <label
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all border shadow-sm ${
+              isLocked
+                ? 'bg-surface-container-high text-on-surface-variant/50 border-outline-variant/30 cursor-not-allowed'
+                : 'bg-primary-container text-primary border-primary/30 cursor-pointer hover:bg-primary-container/80 hover:shadow-md active:scale-95'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">upload_file</span>
             Import Excel
             <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isLocked} />
           </label>
-          <div className="flex items-center">
-            <label className="mr-2 font-medium text-xs sm:text-sm">Date:</label>
+          <div className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-xl border border-outline-variant/40 shadow-sm">
+            <span className="material-symbols-outlined text-primary text-base">calendar_today</span>
+            <label className="font-bold text-xs text-on-surface-variant">Date:</label>
             <input
               type="date"
               value={reportDate}
               onChange={(e) => setReportDate(e.target.value)}
-              className="p-1.5 sm:p-2 border rounded text-xs sm:text-sm"
+              className="p-1 bg-surface-container-lowest border border-outline-variant/40 rounded-lg text-xs font-bold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
@@ -503,8 +520,13 @@ export default function DailyMillReport() {
           <button
              type="submit"
              disabled={isLocked}
-             className={`px-8 py-3 rounded-lg text-white font-bold text-lg shadow-md transition-colors ${isLocked ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand hover:bg-brand-dark'}`}
+             className={`inline-flex items-center gap-2 px-8 py-3 rounded-xl text-white font-bold text-base sm:text-lg shadow-lg transition-all ${
+               isLocked
+                 ? 'bg-surface-container-high text-on-surface-variant/50 border border-outline-variant/30 cursor-not-allowed'
+                 : 'bg-primary hover:bg-primary/90 hover:shadow-xl active:scale-95'
+             }`}
           >
+            <span className="material-symbols-outlined text-xl">save</span>
             {isExistingReport ? 'Update Report' : 'Save Report'}
           </button>
         </div>

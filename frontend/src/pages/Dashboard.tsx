@@ -294,9 +294,23 @@ export default function Dashboard() {
                   )}
                 </td>
                 <td className="p-3 text-gray-500">{new Date(report.created_at).toLocaleString()}</td>
-                <td className="p-3 text-right space-x-4">
-                  {isAdmin && <Link to={`/daily-mill?date=${report.report_date.split('T')[0]}`} className="text-blue-600 hover:underline text-sm font-medium">Edit</Link>}
-                  <button onClick={() => handleDownloadExcel(report.report_date.split('T')[0])} className="text-green-600 hover:underline text-sm font-medium">Download Excel</button>
+                <td className="p-3 text-right space-x-2">
+                  {isAdmin && (
+                    <Link
+                      to={`/daily-mill?date=${report.report_date.split('T')[0]}`}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-primary-container text-primary rounded-lg hover:bg-primary-container/80 text-xs font-bold transition-all shadow-sm"
+                    >
+                      <span className="material-symbols-outlined text-sm">edit</span>
+                      Edit
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => handleDownloadExcel(report.report_date.split('T')[0])}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-high text-on-surface hover:bg-surface-dim rounded-lg text-xs font-bold transition-all border border-outline-variant/30 shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-sm">table_view</span>
+                    Download Excel
+                  </button>
                 </td>
               </tr>
             ))}

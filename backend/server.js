@@ -19,7 +19,7 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 // Routes
@@ -41,13 +41,15 @@ app.get('/', (req, res) => {
 db.migrate.latest()
   .then(() => {
     console.log('Database migrations verified successfully');
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
+    app.listen(port, '0.0.0.0', () => {
+      console.log(`Server running on all interfaces (0.0.0.0:${port})`);
+      console.log(`➜  Local:   http://localhost:${port}/api`);
+      console.log(`➜  Network: http://192.168.1.32:${port}/api`);
     });
   })
   .catch((err) => {
     console.error('Migration error on startup:', err);
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
+    app.listen(port, '0.0.0.0', () => {
+      console.log(`Server running on all interfaces (0.0.0.0:${port})`);
     });
   });
