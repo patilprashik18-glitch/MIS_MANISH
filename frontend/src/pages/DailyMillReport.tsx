@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import SectionBox from '../components/SectionBox';
 
 export default function DailyMillReport() {
   const { user } = useAuth();
@@ -300,9 +301,12 @@ export default function DailyMillReport() {
     }
   };
 
-  const renderGrid = (title: string, state: any[], setState: any, hasAmount: boolean = false) => (
-    <div className="bg-white p-6 rounded-xl shadow-sm mb-6 flex-1 min-w-[280px]">
-      <h2 className="text-lg font-semibold mb-4 text-brand font-headline-md">{title}</h2>
+  const renderGrid = (title: string, state: any[], setState: any, hasAmount: boolean = false, sectionKey: string = 'todays_production') => (
+    <SectionBox
+      sectionKey={sectionKey}
+      defaultTitle={title}
+      className="bg-white p-6 rounded-xl shadow-sm mb-6 flex-1 min-w-[280px]"
+    >
       <div className="max-h-96 overflow-x-auto w-full max-w-full">
         <table className="w-full text-left text-sm min-w-[400px]">
           <thead>
@@ -325,7 +329,7 @@ export default function DailyMillReport() {
           </tbody>
         </table>
       </div>
-    </div>
+    </SectionBox>
   );
 
   return (
@@ -366,8 +370,7 @@ export default function DailyMillReport() {
         <fieldset disabled={isLocked} className="contents">
         
         {/* GRINDING & BRAN SUMMARY */}
-        <div className="bg-white p-6 rounded-xl shadow-sm mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-brand font-headline-md">Grinding & Bran Production</h2>
+        <SectionBox sectionKey="grinding_power" defaultTitle="Grinding & Bran Production" className="bg-white p-6 rounded-xl shadow-sm mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div><label className="block text-xs text-gray-500">Mill Grinding (मिल पिसाई)</label><input type="number" value={parentData.mill_grinding} onChange={e => setParentData({...parentData, mill_grinding: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" /></div>
             <div><label className="block text-xs text-gray-500">Chakki Grinding (चक्की पिसाई)</label><input type="number" value={parentData.chakki_grinding} onChange={e => setParentData({...parentData, chakki_grinding: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" /></div>
@@ -381,21 +384,20 @@ export default function DailyMillReport() {
             <div><label className="block text-xs text-gray-500">Calcium (क्लाशियम)</label><input type="number" value={parentData.bran_calcium} onChange={e => setParentData({...parentData, bran_calcium: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" /></div>
             <div><label className="block text-xs text-gray-500">Kanki (कनकी)</label><input type="number" value={parentData.bran_kanki} onChange={e => setParentData({...parentData, bran_kanki: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" /></div>
           </div>
-        </div>
+        </SectionBox>
 
         {/* CORE PRODUCT GRIDS */}
         <div className="flex flex-wrap gap-6 mb-6">
-          {renderGrid('Finish Stock', finishStock, setFinishStock, false)}
-          {renderGrid('Sales Report', salesReport, setSalesReport, true)}
+          {renderGrid('Finish Stock', finishStock, setFinishStock, false, 'finish_stock')}
+          {renderGrid('Sales Report', salesReport, setSalesReport, true, 'sales_report')}
         </div>
         <div className="flex flex-wrap gap-6 mb-6">
-          {renderGrid('Pending Sauda', salesPending, setSalesPending, true)}
-          {renderGrid('Today\'s Production', todaysProduction, setTodaysProduction, false)}
+          {renderGrid('Pending Sauda', salesPending, setSalesPending, true, 'sales_pending')}
+          {renderGrid('Today\'s Production', todaysProduction, setTodaysProduction, false, 'todays_production')}
         </div>
 
         {/* SALESMAN SALES GRID */}
-        <div className="bg-white p-6 rounded-xl shadow-sm mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-brand font-headline-md">Salesman Wise Sales</h2>
+        <SectionBox sectionKey="salesman_sales" defaultTitle="Salesman Wise Sales" className="bg-white p-6 rounded-xl shadow-sm mb-6">
           <div className="max-h-96 overflow-auto">
             <table className="w-full text-left text-sm min-w-[500px]">
               <thead>
@@ -420,13 +422,12 @@ export default function DailyMillReport() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SectionBox>
 
         {/* MOISTURE & LAB REPORT */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white p-6 rounded-xl shadow-sm">
+          <SectionBox sectionKey="moisture" defaultTitle="Moisture Report" className="bg-white p-6 rounded-xl shadow-sm">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-brand">Moisture Report</h2>
               {filledMoisture.length > 0 && (
                 <span className={`text-xs font-semibold px-2 py-1 rounded-full ${isMoistureOutOfRange ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
                   Avg {avgMoisture.toFixed(2)}% {isMoistureOutOfRange ? '- Out of range' : ''}
@@ -448,10 +449,9 @@ export default function DailyMillReport() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </SectionBox>
           
-          <div className="bg-white p-6 rounded-xl shadow-sm">
-            <h2 className="text-lg font-semibold mb-4 text-brand">Lab Report</h2>
+          <SectionBox sectionKey="lab_report" defaultTitle="Lab Report" className="bg-white p-6 rounded-xl shadow-sm">
             <div className="space-y-4">
               <div className="flex justify-between items-center"><label className="w-32">W.P %</label><input type="number" value={labReport.wp||''} onChange={e => setLabReport({...labReport, wp: parseFloat(e.target.value)||0})} className="flex-1 p-2 border rounded"/></div>
               <div className="flex justify-between items-center"><label className="w-32">Ash %</label><input type="number" value={labReport.ash||''} onChange={e => setLabReport({...labReport, ash: parseFloat(e.target.value)||0})} className="flex-1 p-2 border rounded"/></div>
@@ -459,45 +459,43 @@ export default function DailyMillReport() {
               <div className="flex justify-between items-center"><label className="w-32">Sedimentation</label><input type="number" value={labReport.sedimentation||''} onChange={e => setLabReport({...labReport, sedimentation: parseFloat(e.target.value)||0})} className="flex-1 p-2 border rounded"/></div>
               <div className="flex justify-between items-center"><label className="w-32">Bread Height (mm)</label><input type="number" value={labReport.bread_height||''} onChange={e => setLabReport({...labReport, bread_height: parseFloat(e.target.value)||0})} className="flex-1 p-2 border rounded"/></div>
             </div>
-          </div>
+          </SectionBox>
         </div>
 
         {/* OTHER SECTIONS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm overflow-hidden">
-                <h2 className="text-lg font-semibold mb-4 text-brand">Attendance</h2>
-                <div className="overflow-x-auto w-full max-w-full">
-                  <table className="w-full text-left text-sm min-w-[380px]">
-                      <thead><tr className="bg-gray-50 border-b"><th className="p-2">Dept</th><th className="p-2">Total</th><th className="p-2">Present</th><th className="p-2">Absent</th></tr></thead>
-                      <tbody>
-                          {attendance.map((a, idx) => (
-                              <tr key={a.department} className="border-b last:border-0"><td className="p-2 font-medium text-xs">{a.department}</td>
-                                  <td><input type="number" value={a.total||''} onChange={e=>{const nm=[...attendance]; nm[idx].total = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
-                                  <td><input type="number" value={a.present||''} onChange={e=>{const nm=[...attendance]; nm[idx].present = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
-                                  <td><input type="number" value={a.absent||''} onChange={e=>{const nm=[...attendance]; nm[idx].absent = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
-                </div>
+          <SectionBox sectionKey="attendance" defaultTitle="Attendance" className="bg-white p-6 rounded-xl shadow-sm overflow-hidden">
+            <div className="overflow-x-auto w-full max-w-full">
+              <table className="w-full text-left text-sm min-w-[380px]">
+                <thead><tr className="bg-gray-50 border-b"><th className="p-2">Dept</th><th className="p-2">Total</th><th className="p-2">Present</th><th className="p-2">Absent</th></tr></thead>
+                <tbody>
+                  {attendance.map((a, idx) => (
+                    <tr key={a.department} className="border-b last:border-0"><td className="p-2 font-medium text-xs">{a.department}</td>
+                      <td><input type="number" value={a.total||''} onChange={e=>{const nm=[...attendance]; nm[idx].total = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
+                      <td><input type="number" value={a.present||''} onChange={e=>{const nm=[...attendance]; nm[idx].present = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
+                      <td><input type="number" value={a.absent||''} onChange={e=>{const nm=[...attendance]; nm[idx].absent = parseFloat(e.target.value)||0; setAttendance(nm);}} className="w-full p-1 border rounded"/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          </SectionBox>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h2 className="text-lg font-semibold mb-4 text-brand">Power Consumption & Wheat Stock</h2>
-                <div className="space-y-4">
-                    <h3 className="font-semibold text-gray-600 border-b pb-1">Power</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs text-gray-500">Unit Consumed Today</label><input type="number" value={parentData.power_units||''} onChange={e => setParentData({...parentData, power_units: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
-                        <div><label className="block text-xs text-gray-500">Rate per Unit (₹)</label><input type="number" value={parentData.power_rate_per_unit||''} onChange={e => setParentData({...parentData, power_rate_per_unit: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
-                    </div>
-                    <h3 className="font-semibold text-gray-600 border-b pb-1 mt-6">Wheat Stock</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs text-gray-500">Opening Balance</label><input type="number" value={parentData.wheat_opening||''} onChange={e => setParentData({...parentData, wheat_opening: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
-                        <div><label className="block text-xs text-gray-500">Received Today</label><input type="number" value={parentData.wheat_received||''} onChange={e => setParentData({...parentData, wheat_received: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
-                        <div><label className="block text-xs text-gray-500">Purchase Rate (₹)</label><input type="number" value={parentData.wheat_purchase_rate||''} onChange={e => setParentData({...parentData, wheat_purchase_rate: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
-                    </div>
-                </div>
+          <SectionBox sectionKey="wheat_stock" defaultTitle="Power Consumption & Wheat Stock" className="bg-white p-6 rounded-xl shadow-sm">
+            <div className="space-y-4">
+              <h3 className="font-semibold text-gray-600 border-b pb-1">Power</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-xs text-gray-500">Unit Consumed Today</label><input type="number" value={parentData.power_units||''} onChange={e => setParentData({...parentData, power_units: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
+                <div><label className="block text-xs text-gray-500">Rate per Unit (₹)</label><input type="number" value={parentData.power_rate_per_unit||''} onChange={e => setParentData({...parentData, power_rate_per_unit: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
+              </div>
+              <h3 className="font-semibold text-gray-600 border-b pb-1 mt-6">Wheat Stock</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-xs text-gray-500">Opening Balance</label><input type="number" value={parentData.wheat_opening||''} onChange={e => setParentData({...parentData, wheat_opening: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
+                <div><label className="block text-xs text-gray-500">Received Today</label><input type="number" value={parentData.wheat_received||''} onChange={e => setParentData({...parentData, wheat_received: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
+                <div><label className="block text-xs text-gray-500">Purchase Rate (₹)</label><input type="number" value={parentData.wheat_purchase_rate||''} onChange={e => setParentData({...parentData, wheat_purchase_rate: parseFloat(e.target.value)||0})} className="w-full p-2 border rounded" /></div>
+              </div>
             </div>
+          </SectionBox>
         </div>
 
         {/* SUBMIT BUTTON */}

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useConfig } from '../context/ConfigContext';
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { isSuperAdmin, visualCustomizerMode, setVisualCustomizerMode } = useConfig();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -22,6 +24,7 @@ export default function Layout() {
   if (user?.role === 'admin') {
     navLinks.push({ name: 'Users', path: '/users', icon: 'group' });
     navLinks.push({ name: 'Master Data', path: '/master-data', icon: 'database' });
+    navLinks.push({ name: 'Layout & Perms', path: '/layout-permissions', icon: 'admin_panel_settings' });
     navLinks.push({ name: 'Alerts', path: '/settings', icon: 'settings' });
     navLinks.push({ name: 'Audit Log', path: '/audit-log', icon: 'history' });
   }
@@ -43,10 +46,15 @@ export default function Layout() {
         }`}
       >
         <div className="px-6 mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="font-display-lg text-2xl font-bold text-primary">MillOps</h1>
-            <p className="text-on-surface-variant font-label-sm uppercase tracking-widest text-[10px]">Enterprise ERP • MFMPL</p>
-          </div>
+          <Link to="/" className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-md">
+              <span className="material-symbols-outlined text-2xl">factory</span>
+            </div>
+            <div>
+              <span className="font-bold tracking-tight text-lg text-primary block">MFMPL</span>
+              <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">MillOps MIS</span>
+            </div>
+          </Link>
           <button
             onClick={() => setSidebarOpen(false)}
             className="p-1 text-on-surface-variant hover:text-on-surface lg:hidden rounded-lg"
@@ -116,6 +124,24 @@ export default function Layout() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          {isSuperAdmin && (
+            <button
+              onClick={() => setVisualCustomizerMode(!visualCustomizerMode)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm border ${
+                visualCustomizerMode
+                  ? 'bg-amber-500 text-white border-amber-600 animate-pulse'
+                  : 'bg-surface-container-high text-on-surface hover:border-primary/40 border-outline-variant/50'
+              }`}
+              title="Super Admin: Toggle Live Visual Customizer Mode"
+            >
+              <span className="material-symbols-outlined text-sm">
+                {visualCustomizerMode ? 'edit_square' : 'design_services'}
+              </span>
+              <span className="hidden sm:inline">
+                {visualCustomizerMode ? 'Exit Customizer' : 'Customize Page'}
+              </span>
+            </button>
+          )}
           <button className="p-2 text-on-surface-variant hover:text-primary transition-colors relative">
             <span className="material-symbols-outlined">notifications</span>
             <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>

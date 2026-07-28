@@ -40,6 +40,28 @@ router.get('/stats', async (req, res) => {
     for (const rep of reports) {
       const salesData = await db('dmr_sales_report').where('report_id', rep.id).sum('qtl as total');
       const prodData = await db('dmr_todays_production').where('report_id', rep.id).sum('qtl as total');
+      const attendanceData = await db('dmr_attendance').where('report_id', rep.id);
+      const labReport = await db('dmr_lab_report').where('report_id', rep.id).first();
+      const padtalReport = await db('padtal_reports').where('report_date', rep.report_date).first();
+
+      let presentSum = 0;
+      let absentSum = 0;
+      attendanceData.forEach(a => {
+        presentSum += Number(a.present || 0);
+        absentSum += Number(a.absent || 0);
+      });
+
+      // Compute simple padtal net margin if available
+      let padtalMargin = 0;
+      if (padtalReport) {
+        const yields = await db('padtal_yield_detail').where('report_id', padtalReport.id);
+        const exps = await db('padtal_expenses').where('report_id', padtalReport.id);
+        const realization = yields.reduce((sum, y) => sum + (Number(y.yield_percent) * Number(y.avg_rate)) / 100, 0);
+        const expSum = exps.reduce((sum, e) => sum + Number(e.amount), 0);
+        const netRealization = realization - expSum;
+        const adjustedWheat = Number(padtalReport.wheat_rate) * 0.96;
+        padtalMargin = Number((netRealization - adjustedWheat).toFixed(2));
+      }
 
       trendData.push({
         date: rep.report_date,
@@ -47,8 +69,60 @@ router.get('/stats', async (req, res) => {
         chakki_grinding: Number(rep.chakki_grinding),
         power_units: Number(rep.power_units),
         sales_qtl: Number(salesData[0].total || 0),
-        prod_qtl: Number(prodData[0].total || 0)
+        prod_qtl: Number(prodData[0].total || 0),
+        moisture_avg: Number(rep.moisture_average_percent || 0),
+        wp: Number(labReport?.wp || 0),
+        ash: Number(labReport?.ash || 0),
+        gluten: Number(labReport?.gluten || 0),
+        attendance_present: presentSum,
+        attendance_absent: absentSum,
+        padtal_margin: padtalMargin
       });
+    }
+
+    // Get breakdowns for the latest report
+    let productProductionToday = [];
+    let productSalesToday = [];
+    let salesmanSalesToday = [];
+    let attendanceToday = [];
+    let labToday = null;
+
+    if (latestReport) {
+      const prodRows = await db('dmr_todays_production')
+        .leftJoin('master_products', 'dmr_todays_production.product_id', 'master_products.id')
+        .where('report_id', latestReport.id)
+        .select('master_products.name as product_name', 'dmr_todays_production.qtl', 'dmr_todays_production.katta');
+      productProductionToday = prodRows;
+
+      const salesRows = await db('dmr_sales_report')
+        .leftJoin('master_products', 'dmr_sales_report.product_id', 'master_products.id')
+        .where('report_id', latestReport.id)
+        .select('master_products.name as product_name', 'dmr_sales_report.qtl', 'dmr_sales_report.amount');
+      productSalesToday = salesRows;
+
+      const salesmanRows = await db('dmr_salesman_sales')
+        .leftJoin('master_salesmen', 'dmr_salesman_sales.salesman_id', 'master_salesmen.id')
+        .leftJoin('master_products', 'dmr_salesman_sales.product_id', 'master_products.id')
+        .where('report_id', latestReport.id)
+        .select('master_salesmen.name as salesman_name', 'master_products.name as product_name', 'dmr_salesman_sales.qtl', 'dmr_salesman_sales.amount');
+      salesmanSalesToday = salesmanRows;
+
+      attendanceToday = await db('dmr_attendance')
+        .where('report_id', latestReport.id)
+        .select('department', 'total', 'present', 'absent');
+
+      labToday = await db('dmr_lab_report')
+        .where('report_id', latestReport.id)
+        .first();
+    }
+
+    // Get enabled charts config
+    let chartsConfig = [];
+    try {
+      chartsConfig = await db('dashboard_chart_config').orderBy('display_order', 'asc');
+    } catch (e) {
+      // Table might not be migrated yet in dev
+      chartsConfig = [];
     }
 
     // Get recent 5 reports
@@ -59,6 +133,12 @@ router.get('/stats', async (req, res) => {
     res.json({
       kpis,
       trendData,
+      productProductionToday,
+      productSalesToday,
+      salesmanSalesToday,
+      attendanceToday,
+      labToday,
+      chartsConfig,
       recentReports
     });
   } catch (error) {

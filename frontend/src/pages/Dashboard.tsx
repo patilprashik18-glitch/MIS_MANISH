@@ -1,18 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import api from '../api/axios';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import DashboardChartHub from '../components/DashboardChartHub';
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [moistureMin, setMoistureMin] = useState<number | null>(null);
   const [moistureMax, setMoistureMax] = useState<number | null>(null);
 
-  useEffect(() => {
+  const fetchStats = useCallback(() => {
     api.get('/dashboard/stats')
       .then(res => {
         setData(res.data);
@@ -22,6 +23,10 @@ export default function Dashboard() {
         console.error(err);
         setLoading(false);
       });
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
 
     api.get('/settings').then(res => {
       const min = res.data.find((s: any) => s.key === 'moisture_min');
@@ -181,60 +186,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* CHARTS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 w-full max-w-full">
-        {/* Grinding Trend */}
-        <div className="bg-white p-6 rounded-xl shadow-sm min-w-0 overflow-hidden w-full max-w-full">
-          <h2 className="text-lg font-semibold mb-4 text-brand">Grinding Trend (30 Days)</h2>
-          <div className="h-72 w-full min-w-0">
-            <ResponsiveContainer width="99%" height="100%">
-              <LineChart data={data.trendData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{fontSize: 12}} tickFormatter={(tick) => new Date(tick).toLocaleDateString(undefined, {month:'short', day:'numeric'})} />
-                <YAxis />
-                <Tooltip labelFormatter={(label) => new Date(label).toLocaleDateString()} />
-                <Legend />
-                <Line type="monotone" dataKey="mill_grinding" name="Mill (Qtl)" stroke="#3b82f6" strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="chakki_grinding" name="Chakki (Qtl)" stroke="#8b5cf6" strokeWidth={3} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Sales vs Production */}
-        <div className="bg-white p-6 rounded-xl shadow-sm min-w-0 overflow-hidden w-full max-w-full">
-          <h2 className="text-lg font-semibold mb-4 text-brand">Sales vs Production (30 Days)</h2>
-          <div className="h-72 w-full min-w-0">
-            <ResponsiveContainer width="99%" height="100%">
-              <BarChart data={data.trendData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{fontSize: 12}} tickFormatter={(tick) => new Date(tick).toLocaleDateString(undefined, {month:'short', day:'numeric'})} />
-                <YAxis />
-                <Tooltip labelFormatter={(label) => new Date(label).toLocaleDateString()} />
-                <Legend />
-                <Bar dataKey="prod_qtl" name="Produced (Qtl)" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="sales_qtl" name="Sold (Qtl)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Power Consumption */}
-        <div className="bg-white p-6 rounded-xl shadow-sm lg:col-span-2 min-w-0 overflow-hidden w-full max-w-full">
-          <h2 className="text-lg font-semibold mb-4 text-brand">Power Consumption (30 Days)</h2>
-          <div className="h-72 w-full min-w-0">
-            <ResponsiveContainer width="99%" height="100%">
-              <LineChart data={data.trendData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{fontSize: 12}} tickFormatter={(tick) => new Date(tick).toLocaleDateString(undefined, {month:'short', day:'numeric'})} />
-                <YAxis />
-                <Tooltip labelFormatter={(label) => new Date(label).toLocaleDateString()} />
-                <Legend />
-                <Line type="monotone" dataKey="power_units" name="Power Units" stroke="#ef4444" strokeWidth={3} dot={true} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {/* DYNAMIC CHARTS HUB */}
+      <div className="mb-8 w-full max-w-full">
+        <DashboardChartHub
+          data={data}
+          isAdmin={isAdmin}
+          token={token}
+          onRefresh={fetchStats}
+        />
       </div>
 
       {/* Period Comparison */}

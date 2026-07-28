@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import SectionBox from '../components/SectionBox';
 
 export default function PadtalReport() {
   const { user } = useAuth();
@@ -164,8 +165,7 @@ export default function PadtalReport() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Yield Detail */}
-          <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm overflow-hidden">
-            <h2 className="text-lg font-semibold mb-4 text-brand font-headline-md">Yield Detail</h2>
+          <SectionBox sectionKey="padtal_yield" defaultTitle="Yield Detail" className="bg-white p-4 sm:p-6 rounded-xl shadow-sm overflow-hidden">
             <div className="max-h-96 overflow-x-auto w-full max-w-full">
               <table className="w-full text-left text-sm min-w-[350px]">
                 <thead>
@@ -198,11 +198,10 @@ export default function PadtalReport() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </SectionBox>
 
           {/* Calculations Summary */}
-          <div className="bg-white p-6 rounded-xl shadow-sm">
-            <h2 className="text-lg font-semibold mb-4 text-brand">Profitability Summary</h2>
+          <SectionBox sectionKey="padtal_profitability" defaultTitle="Profitability Summary" className="bg-white p-6 rounded-xl shadow-sm">
             <div className="space-y-4">
               <div className="flex justify-between border-b pb-2">
                 <span className="text-gray-600">Wheat Rate Less 4%</span>
@@ -238,7 +237,7 @@ export default function PadtalReport() {
                 )}
               </div>
             </div>
-          </div>
+          </SectionBox>
         </div>
 
         <div className="flex justify-end">

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ConfigProvider } from './context/ConfigContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import DailyMillReport from './pages/DailyMillReport';
@@ -10,6 +11,7 @@ import AdminMasterData from './pages/AdminMasterData';
 import AdminSettings from './pages/AdminSettings';
 import AdminAuditLog from './pages/AdminAuditLog';
 import AuditLogDetail from './pages/AuditLogDetail';
+import AdminLayoutAndPermissions from './pages/AdminLayoutAndPermissions';
 import Layout from './components/Layout';
 
 const ProtectedRoute = ({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) => {
@@ -55,6 +57,11 @@ function AppRoutes() {
             <AuditLogDetail />
           </ProtectedRoute>
         } />
+        <Route path="/layout-permissions" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AdminLayoutAndPermissions />
+          </ProtectedRoute>
+        } />
       </Route>
     </Routes>
   );
@@ -63,9 +70,11 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppRoutes />
-      </Router>
+      <ConfigProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </ConfigProvider>
     </AuthProvider>
   );
 }
