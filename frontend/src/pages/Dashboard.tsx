@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import api from '../api/axios';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
