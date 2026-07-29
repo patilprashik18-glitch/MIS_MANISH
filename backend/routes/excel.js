@@ -169,24 +169,84 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     // Padtal Report Data (Yield details & expenses from Padtal sheet or main sheet)
     const padtal_data = { yield_detail: [], expenses: [], wheat_rate: 0 };
-    const padRow = findPadtalRow('PADTAL', 'YIELD', 'WHEAT COMPOSITION', 'PRODUCT');
+    const padRow = findPadtalRow('PADTAL', 'YIELD', 'WHEAT COMPOSITION', 'PRODUCT', 'उत्पादन');
     if (padRow !== -1) {
-      for (let i = padRow + 1; i < padRow + 25; i++) {
-        const pName = getPadtalStr(i, 0);
-        if (pName && !pName.toUpperCase().includes('TOTAL') && pName !== 'PRODUCT' && pName !== '0') {
-          padtal_data.yield_detail.push({
-            product_name: pName,
-            yield_percent: Number(getPadtalVal(i, 1)) || 0,
-            rate_per_bag: Number(getPadtalVal(i, 2)) || 0,
-            rate_per_kg: Number(getPadtalVal(i, 3)) || 0,
-            avg_rate: Number(getPadtalVal(i, 4)) || 0
-          });
+      for (let i = padRow + 1; i < padRow + 30; i++) {
+        let pName = getPadtalStr(i, 0);
+        let colOffset = 0;
+        if (!pName || /^\d+$/.test(pName)) {
+          pName = getPadtalStr(i, 1);
+          colOffset = 1;
+        }
+        if (pName && !pName.toUpperCase().includes('TOTAL') && !pName.toUpperCase().includes('YIELD') && pName !== 'PRODUCT' && pName !== '0') {
+          const yp = Number(getPadtalVal(i, colOffset + 1)) || 0;
+          const rb = Number(getPadtalVal(i, colOffset + 2)) || 0;
+          const rk = Number(getPadtalVal(i, colOffset + 3)) || 0;
+          const ar = Number(getPadtalVal(i, colOffset + 4)) || 0;
+          if (yp > 0 || rb > 0 || rk > 0 || ar > 0) {
+            padtal_data.yield_detail.push({
+              product_name: pName,
+              yield_percent: yp,
+              rate_per_bag: rb,
+              rate_per_kg: rk,
+              avg_rate: ar
+            });
+          }
         }
       }
     }
-    const wheatRow = findPadtalRow('WHEAT RATE', 'WHEAT');
+    const wheatRow = findPadtalRow('WHEAT RATE', 'WHEAT', 'गेहूं');
     if (wheatRow !== -1) {
-      padtal_data.wheat_rate = Number(getPadtalVal(wheatRow, 1)) || Number(getPadtalVal(wheatRow, 2)) || 0;
+      for (let c = 0; c <= 10; c++) {
+        const val = Number(getPadtalVal(wheatRow, c));
+        if (val > 1000 && val < 6000) {
+          padtal_data.wheat_rate = val;
+          break;
+        }
+      }
+    }
+    const expRow = findPadtalRow('EXPENSE', 'EXPENSES', 'खर्च', 'PARTICULARS');
+    if (expRow !== -1) {
+      for (let i = expRow + 1; i < expRow + 20; i++) {
+        let eName = getPadtalStr(i, 0) || getPadtalStr(i, 1) || getPadtalStr(i, 5) || getPadtalStr(i, 6);
+        let eAmt = Number(getPadtalVal(i, 1)) || Number(getPadtalVal(i, 2)) || Number(getPadtalVal(i, 6)) || Number(getPadtalVal(i, 7)) || 0;
+        if (eName && !eName.toUpperCase().includes('TOTAL') && eAmt > 0) {
+          padtal_data.expenses.push({ expense_name: eName, amount: eAmt });
+        }
+      }
+    }
+
+    // Automatically upsert Padtal Report in DB so uploading updates both
+    try {
+      let padtalReport = await db('padtal_reports').where({ report_date }).first();
+      if (padtalReport) {
+        await db('padtal_reports').where({ id: padtalReport.id }).update({
+          wheat_rate: padtal_data.wheat_rate || 0,
+          updated_at: db.fn.now()
+        });
+      } else {
+        const [newId] = await db('padtal_reports').insert({
+          report_date,
+          wheat_rate: padtal_data.wheat_rate || 0,
+          difference_percent: 0,
+          created_by: req.user ? req.user.id : 1
+        });
+        padtalReport = { id: newId };
+      }
+      if (padtalReport && padtal_data.yield_detail && padtal_data.yield_detail.length > 0) {
+        await db('padtal_yield_details').where({ report_id: padtalReport.id }).del();
+        const toInsert = padtal_data.yield_detail.map(item => ({
+          report_id: padtalReport.id,
+          product_name: item.product_name,
+          yield_percent: item.yield_percent,
+          rate_per_bag: item.rate_per_bag,
+          rate_per_kg: item.rate_per_kg,
+          avg_rate: item.avg_rate
+        }));
+        await db('padtal_yield_details').insert(toInsert);
+      }
+    } catch (dbErr) {
+      console.error('Auto-save Padtal Report note:', dbErr.message);
     }
 
     res.json({ success: true, parsedData: { report_date, parentData, lab_report, finish_stock, sales_report, sales_pending, todays_production, attendance, salesman_sales, padtal_data } });
@@ -215,16 +275,29 @@ router.get('/export/:date', async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const fs = await import('fs');
     const path = await import('path');
-    let templatePath = path.resolve('../REPORT.xlsx');
-    if (!fs.existsSync(templatePath)) {
-      if (fs.existsSync(path.resolve('../REPORT -01-07-26.xlsx'))) {
-        templatePath = path.resolve('../REPORT -01-07-26.xlsx');
-      } else {
-        const rootFiles = fs.readdirSync(path.resolve('..')).filter(f => f.endsWith('.xlsx') && !f.startsWith('~'));
-        if (rootFiles.length > 0) {
-          templatePath = path.resolve('..', rootFiles[0]);
+    const findTemplatePath = () => {
+      const candidates = [
+        path.resolve('../REPORT -01-07-26.xlsx'),
+        path.resolve('../REPORT.xlsx'),
+        path.resolve('REPORT -01-07-26.xlsx'),
+        path.resolve('REPORT.xlsx'),
+        path.resolve('../../REPORT -01-07-26.xlsx'),
+        path.resolve('../../REPORT.xlsx')
+      ];
+      for (const p of candidates) {
+        if (fs.existsSync(p)) return p;
+      }
+      for (const dir of [path.resolve('..'), path.resolve('.'), path.resolve('../..')]) {
+        if (fs.existsSync(dir)) {
+          const files = fs.readdirSync(dir).filter(f => f.endsWith('.xlsx') && !f.startsWith('~'));
+          if (files.length > 0) return path.join(dir, files[0]);
         }
       }
+      return null;
+    };
+    const templatePath = findTemplatePath();
+    if (!templatePath) {
+      return res.status(500).json({ error: 'Excel template (.xlsx) file not found on server' });
     }
     await workbook.xlsx.readFile(templatePath);
     

@@ -130,6 +130,15 @@ router.get('/stats', async (req, res) => {
       .orderBy('report_date', 'desc')
       .limit(5);
 
+    let recentPadtalReports = [];
+    try {
+      recentPadtalReports = await db('padtal_reports')
+        .orderBy('report_date', 'desc')
+        .limit(5);
+    } catch (e) {
+      recentPadtalReports = [];
+    }
+
     res.json({
       kpis,
       trendData,
@@ -139,7 +148,8 @@ router.get('/stats', async (req, res) => {
       attendanceToday,
       labToday,
       chartsConfig,
-      recentReports
+      recentReports,
+      recentPadtalReports
     });
   } catch (error) {
     console.error(error);

@@ -322,6 +322,47 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Recent Padtal Reports Table */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold font-headline-md text-gray-800">Recent Padtal Reports</h2>
+          <Link to="/padtal" className="text-brand hover:underline text-sm font-medium">+ New Padtal</Link>
+        </div>
+        <div className="overflow-x-auto w-full max-w-full">
+          <table className="w-full text-left text-sm min-w-[500px]">
+            <thead>
+              <tr className="bg-gray-50 border-b">
+                <th className="p-3">Report Date</th>
+                <th className="p-3">Wheat Rate (₹)</th>
+                <th className="p-3">Created At</th>
+                <th className="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+            {(data.recentPadtalReports || []).map((rep: any) => (
+              <tr key={rep.id} className="border-b last:border-0 hover:bg-gray-50">
+                <td className="p-3 font-medium">{new Date(rep.report_date).toLocaleDateString()}</td>
+                <td className="p-3 font-semibold text-gray-800">₹{Number(rep.wheat_rate).toFixed(2)}</td>
+                <td className="p-3 text-gray-500">{new Date(rep.created_at).toLocaleString()}</td>
+                <td className="p-3 text-right space-x-2">
+                  <Link
+                    to={`/padtal?date=${rep.report_date.split('T')[0]}`}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-primary-container text-primary rounded-lg hover:bg-primary-container/80 text-xs font-bold transition-all shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-sm">edit</span>
+                    View / Edit
+                  </Link>
+                </td>
+              </tr>
+            ))}
+            {(!data.recentPadtalReports || data.recentPadtalReports.length === 0) && (
+              <tr><td colSpan={4} className="p-4 text-center text-gray-500">No Padtal reports found.</td></tr>
+            )}
+          </tbody>
+        </table>
+        </div>
+      </div>
+
     </div>
   );
 }
