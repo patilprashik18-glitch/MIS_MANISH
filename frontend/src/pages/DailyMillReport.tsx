@@ -105,6 +105,13 @@ export default function DailyMillReport() {
       });
       const parsed = res.data.parsedData;
       if (parsed) {
+        if (parsed.report_date) {
+          setReportDate(parsed.report_date);
+          localStorage.setItem('last_imported_excel_date', parsed.report_date);
+        }
+        if (parsed.padtal_data) {
+          localStorage.setItem('last_imported_padtal_data', JSON.stringify(parsed.padtal_data));
+        }
         if (parsed.parentData) setParentData(prev => ({ ...prev, ...parsed.parentData }));
         if (parsed.lab_report) setLabReport(prev => ({ ...prev, ...parsed.lab_report }));
 

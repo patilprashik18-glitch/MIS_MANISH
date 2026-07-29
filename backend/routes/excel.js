@@ -16,19 +16,53 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames.find(n => n.toUpperCase().includes('REPORT DATA'));
-    const sheet = workbook.Sheets[sheetName || workbook.SheetNames[0]];
+    
+    // 1. Detect report_date from filename (e.g. REPORT -01-07-26.xlsx -> 2026-07-01) or default to today
+    let report_date = new Date().toISOString().split('T')[0];
+    const dateMatch = (req.file.originalname || '').match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/);
+    if (dateMatch) {
+      let dd = Number(dateMatch[1]);
+      let mm = Number(dateMatch[2]);
+      let yyyy = Number(dateMatch[3]);
+      if (yyyy < 100) yyyy += 2000;
+      if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+        report_date = `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+      }
+    }
+
+    const reportSheetName = workbook.SheetNames.find(n => n.toUpperCase().includes('REPORT DATA') || n.toUpperCase().includes('REPORT')) || workbook.SheetNames[0];
+    const padtalSheetName = workbook.SheetNames.find(n => n.toUpperCase().includes('PARTAL') || n.toUpperCase().includes('PADTAL') || n.toUpperCase().includes('YIELD')) || workbook.SheetNames[1] || workbook.SheetNames[0];
+
+    const sheet = workbook.Sheets[reportSheetName];
+    const padtalSheet = workbook.Sheets[padtalSheetName];
+
     const rows = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const padtalRows = xlsx.utils.sheet_to_json(padtalSheet, { header: 1, defval: '' });
 
     // Helper to find row index of any matching keyword with space normalization
     const findRow = (...keywords) => rows.findIndex(r => r && r.some(c => {
       const str = String(c).toUpperCase().replace(/\s+/g, ' ').trim();
       return keywords.some(k => str.includes(k.toUpperCase().replace(/\s+/g, ' ').trim()));
     }));
+    const findPadtalRow = (...keywords) => {
+      let idx = padtalRows.findIndex(r => r && r.some(c => {
+        const str = String(c).toUpperCase().replace(/\s+/g, ' ').trim();
+        return keywords.some(k => str.includes(k.toUpperCase().replace(/\s+/g, ' ').trim()));
+      }));
+      if (idx === -1) {
+        idx = rows.findIndex(r => r && r.some(c => {
+          const str = String(c).toUpperCase().replace(/\s+/g, ' ').trim();
+          return keywords.some(k => str.includes(k.toUpperCase().replace(/\s+/g, ' ').trim()));
+        }));
+      }
+      return idx;
+    };
 
     // Helper to safely get cell from 2D array
     const getVal = (r, c) => (rows[r] && rows[r][c]) ? rows[r][c] : 0;
     const getStr = (r, c) => (rows[r] && rows[r][c]) ? String(rows[r][c]).trim() : '';
+    const getPadtalVal = (r, c) => (padtalRows[r] && padtalRows[r][c]) ? padtalRows[r][c] : ((rows[r] && rows[r][c]) ? rows[r][c] : 0);
+    const getPadtalStr = (r, c) => (padtalRows[r] && padtalRows[r][c]) ? String(padtalRows[r][c]).trim() : ((rows[r] && rows[r][c]) ? String(rows[r][c]).trim() : '');
     const pick = (r, ...cols) => {
       for (const c of cols) {
         if (rows[r] && rows[r][c] !== undefined && rows[r][c] !== '') return rows[r][c];
@@ -133,25 +167,29 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         }
     }
 
-    // Padtal Report Data
-    const padtal_data = { yield_detail: [], expenses: [] };
-    const padRow = findRow('PADTAL', 'YIELD', 'WHEAT COMPOSITION');
+    // Padtal Report Data (Yield details & expenses from Padtal sheet or main sheet)
+    const padtal_data = { yield_detail: [], expenses: [], wheat_rate: 0 };
+    const padRow = findPadtalRow('PADTAL', 'YIELD', 'WHEAT COMPOSITION', 'PRODUCT');
     if (padRow !== -1) {
-      for (let i = padRow + 2; i < padRow + 20; i++) {
-        const pName = getStr(i, 0);
-        if (pName && !pName.toUpperCase().includes('TOTAL')) {
+      for (let i = padRow + 1; i < padRow + 25; i++) {
+        const pName = getPadtalStr(i, 0);
+        if (pName && !pName.toUpperCase().includes('TOTAL') && pName !== 'PRODUCT' && pName !== '0') {
           padtal_data.yield_detail.push({
             product_name: pName,
-            yield_percent: Number(getVal(i, 1)) || 0,
-            rate_per_bag: Number(getVal(i, 2)) || 0,
-            rate_per_kg: Number(getVal(i, 3)) || 0,
-            avg_rate: Number(getVal(i, 4)) || 0
+            yield_percent: Number(getPadtalVal(i, 1)) || 0,
+            rate_per_bag: Number(getPadtalVal(i, 2)) || 0,
+            rate_per_kg: Number(getPadtalVal(i, 3)) || 0,
+            avg_rate: Number(getPadtalVal(i, 4)) || 0
           });
         }
       }
     }
+    const wheatRow = findPadtalRow('WHEAT RATE', 'WHEAT');
+    if (wheatRow !== -1) {
+      padtal_data.wheat_rate = Number(getPadtalVal(wheatRow, 1)) || Number(getPadtalVal(wheatRow, 2)) || 0;
+    }
 
-    res.json({ success: true, parsedData: { parentData, lab_report, finish_stock, sales_report, sales_pending, todays_production, attendance, salesman_sales, padtal_data } });
+    res.json({ success: true, parsedData: { report_date, parentData, lab_report, finish_stock, sales_report, sales_pending, todays_production, attendance, salesman_sales, padtal_data } });
   } catch (error) {
     console.error('Excel parse error:', error);
     res.status(500).json({ error: 'Parse failed' });
@@ -175,7 +213,19 @@ router.get('/export/:date', async (req, res) => {
 
     // Load original template to preserve all formatting and formulas
     const workbook = new ExcelJS.Workbook();
-    const templatePath = '../REPORT.xlsx'; // Assuming it's in the root folder t:\Manish MIS
+    const fs = await import('fs');
+    const path = await import('path');
+    let templatePath = path.resolve('../REPORT.xlsx');
+    if (!fs.existsSync(templatePath)) {
+      if (fs.existsSync(path.resolve('../REPORT -01-07-26.xlsx'))) {
+        templatePath = path.resolve('../REPORT -01-07-26.xlsx');
+      } else {
+        const rootFiles = fs.readdirSync(path.resolve('..')).filter(f => f.endsWith('.xlsx') && !f.startsWith('~'));
+        if (rootFiles.length > 0) {
+          templatePath = path.resolve('..', rootFiles[0]);
+        }
+      }
+    }
     await workbook.xlsx.readFile(templatePath);
     
     const sheet = workbook.worksheets.find(w => w.name.toUpperCase().includes('REPORT DATA')) || workbook.worksheets[0];

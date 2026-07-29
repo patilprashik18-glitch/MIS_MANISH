@@ -108,8 +108,46 @@ export default function PadtalReport() {
         }
       } catch (err: any) {
         if (err.response && err.response.status === 404) {
-          setWheatRate(0);
-          // Leave yield_detail/expenses as-is (zeroed defaults) since there's nothing saved for this date
+          const cachedDate = localStorage.getItem('last_imported_excel_date');
+          const cachedPadtal = localStorage.getItem('last_imported_padtal_data');
+          if (cachedDate === reportDate && cachedPadtal) {
+            try {
+              const padData = JSON.parse(cachedPadtal);
+              if (padData.wheat_rate) setWheatRate(Number(padData.wheat_rate) || 0);
+              if (padData.yield_detail && padData.yield_detail.length > 0) {
+                setYieldDetail(prev => {
+                  const newState = [...prev];
+                  padData.yield_detail.forEach((pItem: any) => {
+                    const cleanP = (pItem.product_name || '').toLowerCase().replace(/[\s\-_]/g, '');
+                    const idx = newState.findIndex(s => {
+                      const cleanS = (s.name || '').toLowerCase().replace(/[\s\-_]/g, '');
+                      return cleanS.includes(cleanP) || cleanP.includes(cleanS);
+                    });
+                    if (idx !== -1) {
+                      newState[idx].yield_percent = pItem.yield_percent || newState[idx].yield_percent;
+                      newState[idx].rate_per_bag = pItem.rate_per_bag || newState[idx].rate_per_bag;
+                      newState[idx].rate_per_kg = pItem.rate_per_kg || newState[idx].rate_per_kg;
+                      newState[idx].avg_rate = pItem.avg_rate || newState[idx].avg_rate;
+                    } else if (pItem.product_name) {
+                      newState.push({
+                        product_id: 0,
+                        name: pItem.product_name,
+                        yield_percent: pItem.yield_percent || 0,
+                        rate_per_bag: pItem.rate_per_bag || 0,
+                        rate_per_kg: pItem.rate_per_kg || 0,
+                        avg_rate: pItem.avg_rate || 0
+                      });
+                    }
+                  });
+                  return newState;
+                });
+              }
+            } catch (e) {
+              console.error('Error parsing cached padtal data', e);
+            }
+          } else {
+            setWheatRate(0);
+          }
         }
       }
     };
@@ -143,6 +181,15 @@ export default function PadtalReport() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       const parsed = res.data.parsedData;
+      if (parsed) {
+        if (parsed.report_date) {
+          setReportDate(parsed.report_date);
+          localStorage.setItem('last_imported_excel_date', parsed.report_date);
+        }
+        if (parsed.padtal_data) {
+          localStorage.setItem('last_imported_padtal_data', JSON.stringify(parsed.padtal_data));
+        }
+      }
       if (parsed && parsed.padtal_data) {
         if (parsed.parentData && parsed.parentData.wheat_rate) {
           setWheatRate(Number(parsed.parentData.wheat_rate) || 0);
