@@ -20,14 +20,15 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const sheet = workbook.Sheets[sheetName || workbook.SheetNames[0]];
     const rows = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-    // Helper to find row index of a specific keyword
-    const findRow = (keyword) => rows.findIndex(r => r.some(c => String(c).toUpperCase().includes(keyword.toUpperCase())));
+    // Helper to find row index of any matching keyword with space normalization
+    const findRow = (...keywords) => rows.findIndex(r => r && r.some(c => {
+      const str = String(c).toUpperCase().replace(/\s+/g, ' ').trim();
+      return keywords.some(k => str.includes(k.toUpperCase().replace(/\s+/g, ' ').trim()));
+    }));
 
     // Helper to safely get cell from 2D array
     const getVal = (r, c) => (rows[r] && rows[r][c]) ? rows[r][c] : 0;
     const getStr = (r, c) => (rows[r] && rows[r][c]) ? String(rows[r][c]).trim() : '';
-    // Returns the first column's raw value if the cell is actually present (distinguishes a real 0 from a missing cell),
-    // falling back to the next column only when the cell is truly empty/undefined
     const pick = (r, ...cols) => {
       for (const c of cols) {
         if (rows[r] && rows[r][c] !== undefined && rows[r][c] !== '') return rows[r][c];
@@ -35,9 +36,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       return 0;
     };
 
-    const grindRow = findRow('मिल पिसाई');
-    
-    // Fallbacks if not found
+    const grindRow = findRow('मिल पिसाई', 'MILL GRINDING', 'GRINDING');
     const pRow = grindRow !== -1 ? grindRow : 25; 
 
     const parentData = {
@@ -58,15 +57,14 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         wheat_received: 0 
     };
 
-    // Power
-    const powerRow = findRow('UNIT CONSUMED');
+    const powerRow = findRow('UNIT CONSUMED', 'POWER', 'CONSUMED');
     if(powerRow !== -1) {
         parentData.power_units = Number(pick(powerRow, 1, 2));
         parentData.power_rate_per_unit = Number(getVal(powerRow+3, 1)) || 0;
     }
 
     const lab_report = { wp: 0, ash: 0, gluten: 0, sedimentation: 0, bread_height: 0 };
-    const labRow = findRow('W.P');
+    const labRow = findRow('W.P', 'LAB REPORT', 'QUALITY');
     if(labRow !== -1) {
        lab_report.wp = parseFloat(pick(labRow, 6, 5)) || 0;
        lab_report.ash = parseFloat(pick(labRow, 9, 8)) || 0;
@@ -92,7 +90,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       return arr;
     };
 
-    const finishRow = findRow('FINISH  STOCK');
+    const finishRow = findRow('FINISH STOCK', 'FINISH  STOCK', 'FINISH');
     const finishStart = finishRow !== -1 ? finishRow + 2 : 5;
     
     const finish_stock = parseGrid2D(finishStart, 16, 0, 2, 3);
@@ -100,15 +98,32 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const sales_pending = parseGrid2D(finishStart, 16, 11, 12, 14, 15);
     const todays_production = parseGrid2D(pRow, 16, 5, 6, 8);
 
-    // Anchor on the PRESENT/ABSENT header row itself rather than the 'ATTENDANCE' section
-    // title, since that title also appears again on the header row directly above the data
-    // and offsetting from the title skipped straight into that header row instead of the data.
-    const attRow = findRow('PRESENT');
+    // Salesman Wise Sales
+    const salesman_sales = [];
+    const smRow = findRow('SALESMAN', 'PARTY WISE', 'SALESMAN WISE');
+    const smStart = smRow !== -1 ? smRow + 2 : -1;
+    if (smStart !== -1) {
+      for (let i = smStart; i < smStart + 35; i++) {
+        const smName = getStr(i, 0) || getStr(i, 1);
+        const prodName = getStr(i, 1) || getStr(i, 2);
+        if (smName && !smName.toUpperCase().includes('TOTAL') && smName !== 'SALESMAN' && prodName && !prodName.toUpperCase().includes('TOTAL')) {
+          salesman_sales.push({
+            salesman_name: smName,
+            product_name: prodName,
+            katta: Number(getVal(i, 2)) || Number(getVal(i, 3)) || 0,
+            qtl: Number(getVal(i, 3)) || Number(getVal(i, 4)) || 0,
+            amount: Number(getVal(i, 4)) || Number(getVal(i, 5)) || 0
+          });
+        }
+      }
+    }
+
+    const attRow = findRow('PRESENT', 'ATTENDANCE');
     const attendance = [];
     if(attRow !== -1) {
         for(let i=attRow+1; i<=attRow+8; i++) {
             const dept = getStr(i, 0);
-            if(dept && dept !== 'TOTAL') {
+            if(dept && !dept.toUpperCase().includes('TOTAL')) {
                 attendance.push({
                     department: dept,
                     present: Number(getVal(i, 3)) || 0,
@@ -118,7 +133,25 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         }
     }
 
-    res.json({ success: true, parsedData: { parentData, lab_report, finish_stock, sales_report, sales_pending, todays_production, attendance } });
+    // Padtal Report Data
+    const padtal_data = { yield_detail: [], expenses: [] };
+    const padRow = findRow('PADTAL', 'YIELD', 'WHEAT COMPOSITION');
+    if (padRow !== -1) {
+      for (let i = padRow + 2; i < padRow + 20; i++) {
+        const pName = getStr(i, 0);
+        if (pName && !pName.toUpperCase().includes('TOTAL')) {
+          padtal_data.yield_detail.push({
+            product_name: pName,
+            yield_percent: Number(getVal(i, 1)) || 0,
+            rate_per_bag: Number(getVal(i, 2)) || 0,
+            rate_per_kg: Number(getVal(i, 3)) || 0,
+            avg_rate: Number(getVal(i, 4)) || 0
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, parsedData: { parentData, lab_report, finish_stock, sales_report, sales_pending, todays_production, attendance, salesman_sales, padtal_data } });
   } catch (error) {
     console.error('Excel parse error:', error);
     res.status(500).json({ error: 'Parse failed' });

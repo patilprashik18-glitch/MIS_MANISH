@@ -109,17 +109,26 @@ export default function DailyMillReport() {
         if (parsed.lab_report) setLabReport(prev => ({ ...prev, ...parsed.lab_report }));
 
         const updateGrid = (parsedArray: any[], prev: any[]) => {
-          if(!parsedArray) return prev;
+          if(!parsedArray || parsedArray.length === 0) return prev;
           const newState = [...prev];
           parsedArray.forEach(pItem => {
-            const matchIndex = newState.findIndex(sItem => 
-               sItem.name.toLowerCase().replace(/\s/g, '').includes(pItem.name.toLowerCase().replace(/\s/g, '')) || 
-               pItem.name.toLowerCase().replace(/\s/g, '').includes(sItem.name.toLowerCase().replace(/\s/g, ''))
-            );
+            const cleanP = (pItem.name || '').toLowerCase().replace(/[\s\-_]/g, '');
+            const matchIndex = newState.findIndex(sItem => {
+               const cleanS = (sItem.name || '').toLowerCase().replace(/[\s\-_]/g, '');
+               return cleanS.includes(cleanP) || cleanP.includes(cleanS);
+            });
             if(matchIndex !== -1) {
               newState[matchIndex].katta = pItem.katta || newState[matchIndex].katta;
               newState[matchIndex].qtl = pItem.qtl || newState[matchIndex].qtl;
               if (pItem.amount !== undefined) newState[matchIndex].amount = pItem.amount || newState[matchIndex].amount;
+            } else if (pItem.name) {
+              newState.push({
+                product_id: 0,
+                name: pItem.name,
+                katta: pItem.katta || 0,
+                qtl: pItem.qtl || 0,
+                amount: pItem.amount || 0
+              });
             }
           });
           return newState;
@@ -129,6 +138,34 @@ export default function DailyMillReport() {
         setSalesReport(prev => updateGrid(parsed.sales_report, prev));
         setSalesPending(prev => updateGrid(parsed.sales_pending, prev));
         setTodaysProduction(prev => updateGrid(parsed.todays_production, prev));
+
+        if (parsed.salesman_sales && parsed.salesman_sales.length > 0) {
+          setSalesmanSales(prev => {
+            const newState = [...prev];
+            parsed.salesman_sales.forEach((pItem: any) => {
+              const idx = newState.findIndex(s => 
+                (s.salesman_name || '').toLowerCase().replace(/\s/g, '') === (pItem.salesman_name || '').toLowerCase().replace(/\s/g, '') &&
+                (s.product_name || s.name || '').toLowerCase().replace(/\s/g, '') === (pItem.product_name || '').toLowerCase().replace(/\s/g, '')
+              );
+              if (idx !== -1) {
+                newState[idx].katta = pItem.katta || newState[idx].katta;
+                newState[idx].qtl = pItem.qtl || newState[idx].qtl;
+                newState[idx].amount = pItem.amount || newState[idx].amount;
+              } else {
+                newState.push({
+                  salesman_id: 0,
+                  salesman_name: pItem.salesman_name,
+                  product_id: 0,
+                  product_name: pItem.product_name,
+                  katta: pItem.katta || 0,
+                  qtl: pItem.qtl || 0,
+                  amount: pItem.amount || 0
+                });
+              }
+            });
+            return newState;
+          });
+        }
 
         if (parsed.attendance) {
            setAttendance(prev => {

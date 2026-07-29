@@ -133,18 +133,84 @@ export default function PadtalReport() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await api.post('/excel/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const parsed = res.data.parsedData;
+      if (parsed && parsed.padtal_data) {
+        if (parsed.parentData && parsed.parentData.wheat_rate) {
+          setWheatRate(Number(parsed.parentData.wheat_rate) || 0);
+        }
+        if (parsed.padtal_data.yield_detail && parsed.padtal_data.yield_detail.length > 0) {
+          setYieldDetail(prev => {
+            const newState = [...prev];
+            parsed.padtal_data.yield_detail.forEach((pItem: any) => {
+              const cleanP = (pItem.product_name || '').toLowerCase().replace(/[\s\-_]/g, '');
+              const idx = newState.findIndex(s => {
+                const cleanS = (s.name || '').toLowerCase().replace(/[\s\-_]/g, '');
+                return cleanS.includes(cleanP) || cleanP.includes(cleanS);
+              });
+              if (idx !== -1) {
+                newState[idx].yield_percent = pItem.yield_percent || newState[idx].yield_percent;
+                newState[idx].rate_per_bag = pItem.rate_per_bag || newState[idx].rate_per_bag;
+                newState[idx].rate_per_kg = pItem.rate_per_kg || newState[idx].rate_per_kg;
+                newState[idx].avg_rate = pItem.avg_rate || newState[idx].avg_rate;
+              } else if (pItem.product_name) {
+                newState.push({
+                  product_id: 0,
+                  name: pItem.product_name,
+                  yield_percent: pItem.yield_percent || 0,
+                  rate_per_bag: pItem.rate_per_bag || 0,
+                  rate_per_kg: pItem.rate_per_kg || 0,
+                  avg_rate: pItem.avg_rate || 0
+                });
+              }
+            });
+            return newState;
+          });
+        }
+        alert('Padtal report data imported! Please review before saving.');
+      } else {
+        alert('Data imported from sheet. Please verify Padtal entries.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to parse Excel file.');
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto pb-20 overflow-x-hidden w-full max-w-full">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold font-headline-md">Padtal Report</h1>
-        <div>
-          <label className="mr-2 font-medium text-xs sm:text-sm">Date:</label>
-          <input 
-            type="date" 
-            value={reportDate} 
-            onChange={(e) => setReportDate(e.target.value)} 
-            className="p-1.5 sm:p-2 border rounded text-xs sm:text-sm"
-          />
+        <div className="flex items-center gap-3">
+          <label
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all border shadow-sm ${
+              isLocked
+                ? 'bg-surface-container-high text-on-surface-variant/50 border-outline-variant/30 cursor-not-allowed'
+                : 'bg-primary-container text-primary border-primary/30 cursor-pointer hover:bg-primary-container/80 hover:shadow-md active:scale-95'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">upload_file</span>
+            Import Excel
+            <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isLocked} />
+          </label>
+          <div className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-xl border border-outline-variant/40 shadow-sm">
+            <span className="material-symbols-outlined text-primary text-base">calendar_today</span>
+            <label className="font-bold text-xs text-on-surface-variant">Date:</label>
+            <input 
+              type="date" 
+              value={reportDate} 
+              onChange={(e) => setReportDate(e.target.value)} 
+              className="p-1 bg-surface-container-lowest border border-outline-variant/40 rounded-lg text-xs font-bold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
         </div>
       </div>
 
