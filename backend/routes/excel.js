@@ -11,15 +11,12 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(authenticateToken);
 
-router.post('/upload', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+async function parseAndSaveExcel(buffer, originalname, db, user) {
+  const workbook = xlsx.read(buffer, { type: 'buffer' });
     
-    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-    
-    // 1. Detect report_date from filename (e.g. REPORT -01-07-26.xlsx -> 2026-07-01) or default to today
-    let report_date = new Date().toISOString().split('T')[0];
-    const dateMatch = (req.file.originalname || '').match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/);
+  // 1. Detect report_date from filename (e.g. REPORT -01-07-26.xlsx -> 2026-07-01) or default to today
+  let report_date = new Date().toISOString().split('T')[0];
+  const dateMatch = (originalname || '').match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/);
     if (dateMatch) {
       let dd = Number(dateMatch[1]);
       let mm = Number(dateMatch[2]);
@@ -167,92 +164,243 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         }
     }
 
-    // Padtal Report Data (Yield details & expenses from Padtal sheet or main sheet)
-    const padtal_data = { yield_detail: [], expenses: [], wheat_rate: 0 };
-    const padRow = findPadtalRow('PADTAL', 'YIELD', 'WHEAT COMPOSITION', 'PRODUCT', 'उत्पादन');
-    if (padRow !== -1) {
-      for (let i = padRow + 1; i < padRow + 30; i++) {
-        let pName = getPadtalStr(i, 0);
-        let colOffset = 0;
-        if (!pName || /^\d+$/.test(pName)) {
-          pName = getPadtalStr(i, 1);
-          colOffset = 1;
-        }
-        if (pName && !pName.toUpperCase().includes('TOTAL') && !pName.toUpperCase().includes('YIELD') && pName !== 'PRODUCT' && pName !== '0') {
-          const yp = Number(getPadtalVal(i, colOffset + 1)) || 0;
-          const rb = Number(getPadtalVal(i, colOffset + 2)) || 0;
-          const rk = Number(getPadtalVal(i, colOffset + 3)) || 0;
-          const ar = Number(getPadtalVal(i, colOffset + 4)) || 0;
-          if (yp > 0 || rb > 0 || rk > 0 || ar > 0) {
-            padtal_data.yield_detail.push({
-              product_name: pName,
-              yield_percent: yp,
-              rate_per_bag: rb,
-              rate_per_kg: rk,
-              avg_rate: ar
-            });
-          }
+  const padtal_data = { yield_detail: [], expenses: [], wheat_rate: 0 };
+  if (padtalRows.length > 0) {
+    let yieldSectionStart = -1;
+    let expSectionStart = -1;
+    for (let r = 0; r < padtalRows.length; r++) {
+      const row = padtalRows[r];
+      if (!row || row.length === 0) continue;
+      const col0 = String(row[0]).trim().toUpperCase();
+      if (col0.includes('PRODUCTS') || col0.includes('YIELD IN %') || (row[1] && String(row[1]).toUpperCase().includes('YIELD'))) {
+        yieldSectionStart = r + 1;
+      }
+      if (col0.includes('EXPENSE') || col0.includes('GRINDING EXP') || col0.includes('COST')) {
+        expSectionStart = r + 1;
+      }
+      for (let c = 0; c < row.length; c++) {
+        const cell = String(row[c]).trim().toUpperCase();
+        if (cell.includes('WHEAT RATE') || cell.includes('WHEAT COST')) {
+          const val = Number(row[c + 1]) || Number(row[c + 2]) || 0;
+          if (val > 0) padtal_data.wheat_rate = val;
         }
       }
     }
-    const wheatRow = findPadtalRow('WHEAT RATE', 'WHEAT', 'गेहूं');
-    if (wheatRow !== -1) {
-      for (let c = 0; c <= 10; c++) {
-        const val = Number(getPadtalVal(wheatRow, c));
-        if (val > 1000 && val < 6000) {
-          padtal_data.wheat_rate = val;
-          break;
-        }
+
+    if (yieldSectionStart !== -1) {
+      for (let r = yieldSectionStart; r < Math.min(yieldSectionStart + 20, padtalRows.length); r++) {
+        const row = padtalRows[r];
+        if (!row || !row[0]) continue;
+        const pName = String(row[0]).trim();
+        if (pName.toUpperCase().includes('TOTAL') || pName.toUpperCase().includes('REALIZATION')) break;
+        padtal_data.yield_detail.push({
+          product_name: pName,
+          yield_percent: Number(row[1]) || 0,
+          rate_per_bag: Number(row[2]) || 0,
+          rate_per_kg: Number(row[3]) || 0,
+          avg_rate: Number(row[4]) || 0
+        });
       }
     }
-    const expRow = findPadtalRow('EXPENSE', 'EXPENSES', 'खर्च', 'PARTICULARS');
-    if (expRow !== -1) {
-      for (let i = expRow + 1; i < expRow + 20; i++) {
-        let eName = getPadtalStr(i, 0) || getPadtalStr(i, 1) || getPadtalStr(i, 5) || getPadtalStr(i, 6);
-        let eAmt = Number(getPadtalVal(i, 1)) || Number(getPadtalVal(i, 2)) || Number(getPadtalVal(i, 6)) || Number(getPadtalVal(i, 7)) || 0;
-        if (eName && !eName.toUpperCase().includes('TOTAL') && eAmt > 0) {
+
+    if (expSectionStart !== -1) {
+      for (let r = expSectionStart; r < Math.min(expSectionStart + 15, padtalRows.length); r++) {
+        const row = padtalRows[r];
+        if (!row || !row[0]) continue;
+        const eName = String(row[0]).trim();
+        if (eName.toUpperCase().includes('TOTAL')) break;
+        const eAmt = Number(row[1]) || Number(row[2]) || 0;
+        if (eAmt > 0) {
           padtal_data.expenses.push({ expense_name: eName, amount: eAmt });
         }
       }
     }
+  }
 
-    // Automatically upsert Padtal Report in DB so uploading updates both
-    try {
-      let padtalReport = await db('padtal_reports').where({ report_date }).first();
-      if (padtalReport) {
-        await db('padtal_reports').where({ id: padtalReport.id }).update({
-          wheat_rate: padtal_data.wheat_rate || 0,
-          updated_at: db.fn.now()
-        });
-      } else {
-        const [newId] = await db('padtal_reports').insert({
-          report_date,
-          wheat_rate: padtal_data.wheat_rate || 0,
-          difference_percent: 0,
-          created_by: req.user ? req.user.id : 1
-        });
-        padtalReport = { id: newId };
-      }
-      if (padtalReport && padtal_data.yield_detail && padtal_data.yield_detail.length > 0) {
-        await db('padtal_yield_details').where({ report_id: padtalReport.id }).del();
-        const toInsert = padtal_data.yield_detail.map(item => ({
+  try {
+    const getPid = async (name) => {
+      if (!name) return 1;
+      const cleanName = String(name).trim();
+      const existing = await db('master_products').whereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]).first();
+      if (existing) return existing.id;
+      const [newPid] = await db('master_products').insert({ name: cleanName, is_active: 1 });
+      return typeof newPid === 'object' ? newPid.id : newPid;
+    };
+
+    const getSmId = async (name) => {
+      if (!name) return 1;
+      const cleanName = String(name).trim();
+      const existing = await db('master_salesmen').whereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]).first();
+      if (existing) return existing.id;
+      const [newSmId] = await db('master_salesmen').insert({ name: cleanName, is_active: 1 });
+      return typeof newSmId === 'object' ? newSmId.id : newSmId;
+    };
+
+    const getEid = async (name) => {
+      if (!name) return 1;
+      const cleanName = String(name).trim();
+      const existing = await db('master_expenses').whereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]).first();
+      if (existing) return existing.id;
+      const [newEid] = await db('master_expenses').insert({ name: cleanName, is_active: 1 });
+      return typeof newEid === 'object' ? newEid.id : newEid;
+    };
+
+    let padtalReport = await db('padtal_reports').where({ report_date }).first();
+    if (padtalReport) {
+      await db('padtal_reports').where({ id: padtalReport.id }).update({
+        wheat_rate: padtal_data.wheat_rate || 0,
+        updated_at: db.fn.now()
+      });
+    } else {
+      const [newId] = await db('padtal_reports').insert({
+        report_date,
+        wheat_rate: padtal_data.wheat_rate || 0,
+        difference_percent: 0,
+        created_by: user ? user.id : 1
+      });
+      padtalReport = { id: typeof newId === 'object' ? newId.id : newId };
+    }
+    if (padtalReport && padtal_data.yield_detail && padtal_data.yield_detail.length > 0) {
+      await db('padtal_yield_detail').where({ report_id: padtalReport.id }).del();
+      const toInsert = [];
+      for (const item of padtal_data.yield_detail) {
+        const pid = await getPid(item.product_name || item.name);
+        toInsert.push({
           report_id: padtalReport.id,
-          product_name: item.product_name,
-          yield_percent: item.yield_percent,
-          rate_per_bag: item.rate_per_bag,
-          rate_per_kg: item.rate_per_kg,
-          avg_rate: item.avg_rate
-        }));
-        await db('padtal_yield_details').insert(toInsert);
+          product_id: pid,
+          yield_percent: item.yield_percent || 0,
+          rate_per_bag: item.rate_per_bag || 0,
+          rate_per_kg: item.rate_per_kg || 0,
+          avg_rate: item.avg_rate || 0
+        });
       }
-    } catch (dbErr) {
-      console.error('Auto-save Padtal Report note:', dbErr.message);
+      if (toInsert.length > 0) {
+        await db('padtal_yield_detail').insert(toInsert);
+      }
+    }
+    if (padtalReport && padtal_data.expenses && padtal_data.expenses.length > 0) {
+      await db('padtal_expenses').where({ report_id: padtalReport.id }).del();
+      const expInsert = [];
+      for (const exp of padtal_data.expenses) {
+        const eid = await getEid(exp.expense_name || exp.name);
+        expInsert.push({
+          report_id: padtalReport.id,
+          expense_id: eid,
+          amount: exp.amount || 0
+        });
+      }
+      if (expInsert.length > 0) {
+        await db('padtal_expenses').insert(expInsert);
+      }
     }
 
-    res.json({ success: true, parsedData: { report_date, parentData, lab_report, finish_stock, sales_report, sales_pending, todays_production, attendance, salesman_sales, padtal_data } });
+    let dailyReport = await db('daily_mill_reports').where({ report_date }).first();
+    if (dailyReport) {
+      await db('daily_mill_reports').where({ id: dailyReport.id }).update({
+        ...parentData,
+        updated_at: db.fn.now()
+      });
+    } else {
+      const [newDmrId] = await db('daily_mill_reports').insert({
+        report_date,
+        created_by: user ? user.id : 1,
+        ...parentData
+      });
+      dailyReport = { id: typeof newDmrId === 'object' ? newDmrId.id : newDmrId };
+    }
+    if (dailyReport) {
+      const dmrId = dailyReport.id;
+      if (finish_stock && finish_stock.length > 0) {
+        await db('dmr_finish_stock').where({ report_id: dmrId }).del();
+        const rows = [];
+        for (const i of finish_stock) {
+          rows.push({ report_id: dmrId, product_id: await getPid(i.product_name || i.name), katta: i.katta || 0, qtl: i.qtl || 0 });
+        }
+        if (rows.length > 0) await db('dmr_finish_stock').insert(rows);
+      }
+      if (sales_report && sales_report.length > 0) {
+        await db('dmr_sales_report').where({ report_id: dmrId }).del();
+        const rows = [];
+        for (const i of sales_report) {
+          rows.push({ report_id: dmrId, product_id: await getPid(i.product_name || i.name), katta: i.katta || 0, qtl: i.qtl || 0, amount: i.amount || 0 });
+        }
+        if (rows.length > 0) await db('dmr_sales_report').insert(rows);
+      }
+      if (sales_pending && sales_pending.length > 0) {
+        await db('dmr_sales_pending').where({ report_id: dmrId }).del();
+        const rows = [];
+        for (const i of sales_pending) {
+          rows.push({ report_id: dmrId, product_id: await getPid(i.product_name || i.name), katta: i.katta || 0, qtl: i.qtl || 0, amount: i.amount || 0 });
+        }
+        if (rows.length > 0) await db('dmr_sales_pending').insert(rows);
+      }
+      if (todays_production && todays_production.length > 0) {
+        await db('dmr_todays_production').where({ report_id: dmrId }).del();
+        const rows = [];
+        for (const i of todays_production) {
+          rows.push({ report_id: dmrId, product_id: await getPid(i.product_name || i.name), katta: i.katta || 0, qtl: i.qtl || 0 });
+        }
+        if (rows.length > 0) await db('dmr_todays_production').insert(rows);
+      }
+      if (salesman_sales && salesman_sales.length > 0) {
+        await db('dmr_salesman_sales').where({ report_id: dmrId }).del();
+        const rows = [];
+        for (const i of salesman_sales) {
+          rows.push({ report_id: dmrId, salesman_id: await getSmId(i.salesman_name), product_id: await getPid(i.product_name || i.name), katta: i.katta || 0, qtl: i.qtl || 0, amount: i.amount || 0 });
+        }
+        if (rows.length > 0) await db('dmr_salesman_sales').insert(rows);
+      }
+      if (attendance && attendance.length > 0) {
+        await db('dmr_attendance').where({ report_id: dmrId }).del();
+        const rows = attendance.map(a => ({ report_id: dmrId, department: a.department || '', total: a.total || 0, present: a.present || 0, absent: a.absent || 0 }));
+        await db('dmr_attendance').insert(rows);
+      }
+      if (lab_report) {
+        await db('dmr_lab_report').where({ report_id: dmrId }).del();
+        await db('dmr_lab_report').insert({ report_id: dmrId, ...lab_report });
+      }
+    }
+  } catch (dbErr) {
+    console.error('Auto-save Reports note:', dbErr.message);
+  }
+
+  return { report_date, parentData, lab_report, finish_stock, sales_report, sales_pending, todays_production, attendance, salesman_sales, padtal_data };
+}
+
+router.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const parsedData = await parseAndSaveExcel(req.file.buffer, req.file.originalname, db, req.user);
+    res.json({ success: true, parsedData });
   } catch (error) {
     console.error('Excel parse error:', error);
-    res.status(500).json({ error: 'Parse failed' });
+    res.status(500).json({ error: 'Parse failed: ' + error.message });
+  }
+});
+
+router.post('/bulk-upload', upload.any(), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+    const processedDates = [];
+    const failedFiles = [];
+    for (const file of req.files) {
+      try {
+        const parsedData = await parseAndSaveExcel(file.buffer, file.originalname, db, req.user);
+        if (parsedData && parsedData.report_date) {
+          processedDates.push(parsedData.report_date);
+        }
+      } catch (err) {
+        console.error(`Bulk upload error for ${file.originalname}:`, err.message);
+        failedFiles.push({ file: file.originalname, error: err.message });
+      }
+    }
+    processedDates.sort();
+    res.json({ success: true, count: processedDates.length, processedDates, failedFiles });
+  } catch (error) {
+    console.error('Bulk upload error:', error);
+    res.status(500).json({ error: 'Bulk upload failed: ' + error.message });
   }
 });
 

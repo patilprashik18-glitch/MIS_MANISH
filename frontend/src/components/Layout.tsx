@@ -17,8 +17,7 @@ export default function Layout() {
 
   const navLinks = [
     { name: 'Dashboard', path: '/', icon: 'dashboard' },
-    { name: 'Daily Report', path: '/daily-mill', icon: 'assessment' },
-    { name: 'Padtal', path: '/padtal', icon: 'inventory' },
+    { name: 'Daily & Partal Report', path: '/daily-mill', icon: 'assessment' },
   ];
 
   if (user?.role === 'admin') {

@@ -1,43 +1,13 @@
-import express from 'express';
-import db from '../db.js';
-import { authenticateToken, isAdmin } from '../middleware/auth.js';
+import knex from 'knex';
+import knexConfig from './knexfile.js';
 
-const router = express.Router();
-router.use(authenticateToken);
+const db = knex(knexConfig.development);
 
-// Any authenticated user can read thresholds (needed to render alert flags on report/dashboard views)
-router.get('/', async (req, res) => {
+async function clearAllDataKeepUsers() {
+  console.log('Starting data reset (preserving users)...');
+
   try {
-    const rows = await db('settings').select('*');
-    res.json(rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Only Admin can change thresholds
-router.put('/:key', isAdmin, async (req, res) => {
-  try {
-    const { value } = req.body;
-    if (value === undefined || value === null || value === '') {
-      return res.status(400).json({ error: 'Value is required' });
-    }
-
-    const updated = await db('settings').where({ key: req.params.key }).update({ value: String(value) });
-    if (!updated) return res.status(404).json({ error: 'Setting not found' });
-
-    const row = await db('settings').where({ key: req.params.key }).first();
-    res.json(row);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Admin-only endpoint to clear all report data & logs while keeping users
-router.post('/clear-all-data', isAdmin, async (req, res) => {
-  try {
+    // 1. Clear all Daily Mill Report child tables
     const dmrChildren = [
       'dmr_lab_report',
       'dmr_moisture',
@@ -51,16 +21,43 @@ router.post('/clear-all-data', isAdmin, async (req, res) => {
       'dmr_finish_stock',
       'dmr_custom_sections'
     ];
-    for (const table of dmrChildren) {
-      try { await db(table).del(); } catch (err) {}
-    }
-    try { await db('daily_mill_reports').del(); } catch (err) {}
-    try { await db('padtal_yield_detail').del(); } catch (err) {}
-    try { await db('padtal_expenses').del(); } catch (err) {}
-    try { await db('padtal_reports').del(); } catch (err) {}
-    try { await db('audit_logs').del(); } catch (err) {}
 
-    // Reset master tables to clean defaults
+    for (const table of dmrChildren) {
+      try {
+        await db(table).del();
+        console.log(`Cleared table: ${table}`);
+      } catch (err) {
+        // Table might not exist or already clean
+      }
+    }
+
+    // 2. Clear parent Daily Mill Reports
+    try {
+      await db('daily_mill_reports').del();
+      console.log('Cleared table: daily_mill_reports');
+    } catch (err) {}
+
+    // 3. Clear Padtal Report tables
+    try {
+      await db('padtal_yield_detail').del();
+      console.log('Cleared table: padtal_yield_detail');
+    } catch (err) {}
+    try {
+      await db('padtal_expenses').del();
+      console.log('Cleared table: padtal_expenses');
+    } catch (err) {}
+    try {
+      await db('padtal_reports').del();
+      console.log('Cleared table: padtal_reports');
+    } catch (err) {}
+
+    // 4. Clear Audit Logs
+    try {
+      await db('audit_logs').del();
+      console.log('Cleared table: audit_logs');
+    } catch (err) {}
+
+    // 5. Clean & reset master tables to standard defaults
     await db('master_products').del();
     await db('master_salesmen').del();
     await db('master_expenses').del();
@@ -113,12 +110,17 @@ router.post('/clear-all-data', isAdmin, async (req, res) => {
       { name: 'Cash discount', is_active: 1 }
     ]);
 
-    const userCount = await db('users').count('* as count').first();
-    res.json({ success: true, message: `All reports and audit data cleared. Preserved ${userCount.count} user accounts.` });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to reset database' });
-  }
-});
+    console.log('Master data reset to standard default items.');
 
-export default router;
+    const userCount = await db('users').count('* as count').first();
+    console.log(`Successfully preserved ${userCount.count} user account(s).`);
+    console.log('ALL REPORT & AUDIT DATA CLEARED (USERS PRESERVED).');
+
+  } catch (err) {
+    console.error('Error during data reset:', err);
+  } finally {
+    await db.destroy();
+  }
+}
+
+clearAllDataKeepUsers();

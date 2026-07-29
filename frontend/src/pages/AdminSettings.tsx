@@ -41,6 +41,20 @@ export default function AdminSettings() {
     }
   };
 
+  const handleClearAllData = async () => {
+    if (!window.confirm('WARNING: Are you sure you want to clear ALL Daily Mill Reports, Padtal Reports, and Audit Logs? (All Users and standard master items will be preserved.)')) {
+      return;
+    }
+    setError('');
+    setSuccess('');
+    try {
+      const res = await api.post('/settings/clear-all-data');
+      setSuccess(res.data.message || 'All report data cleared successfully. Users preserved.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to clear report data');
+    }
+  };
+
   const settingRow = (key: string, label: string) => {
     const setting = settings.find(s => s.key === key);
     if (!setting) return null;
@@ -69,7 +83,7 @@ export default function AdminSettings() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Alert Thresholds</h1>
+      <h1 className="text-2xl font-bold mb-6">Alert Thresholds &amp; System Reset</h1>
       {error && <div className="text-red-600 mb-4">{error}</div>}
       {success && <div className="text-green-600 mb-4">{success}</div>}
 
@@ -79,9 +93,23 @@ export default function AdminSettings() {
         {settingRow('moisture_max', 'Maximum acceptable')}
       </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm">
+      <div className="bg-white p-6 rounded-xl shadow-sm mb-6">
         <h2 className="text-lg font-semibold mb-2 text-brand">Padtal Report</h2>
         {settingRow('padtal_diff_min', 'Minimum acceptable margin difference %')}
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-red-200">
+        <h2 className="text-lg font-semibold mb-1 text-red-600">Database Reset (Clear All Reports)</h2>
+        <p className="text-xs text-gray-600 mb-4">
+          This will delete all Daily Mill Reports, Padtal Reports, and Audit Logs, and reset master items to clean defaults. 
+          <strong className="text-red-700"> All user accounts and permissions will remain preserved.</strong>
+        </p>
+        <button
+          onClick={handleClearAllData}
+          className="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-lg shadow-sm transition-all text-sm"
+        >
+          Clear All Data (Keep Users)
+        </button>
       </div>
     </div>
   );

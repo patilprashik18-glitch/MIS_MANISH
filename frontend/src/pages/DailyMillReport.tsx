@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import SectionBox from '../components/SectionBox';
@@ -15,9 +15,8 @@ export default function DailyMillReport() {
 
   const [reportDate, setReportDate] = useState(initDate);
   const [isExistingReport, setIsExistingReport] = useState(false);
-  // Mill Floor can create/edit only today's report; once the date passes it's read-only.
-  // Admin is never locked. Server enforces this independently on save.
-  const isLocked = !isAdmin && reportDate !== today;
+  // Allow all users to edit reports for any date
+  const isLocked = false;
   const [products, setProducts] = useState<any[]>([]);
   
   // Parent Data State
@@ -96,6 +95,26 @@ export default function DailyMillReport() {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
+    if (e.target.files.length > 1) {
+      const formData = new FormData();
+      Array.from(e.target.files).forEach(file => {
+        formData.append('files', file);
+      });
+      try {
+        const res = await api.post('/excel/bulk-upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        const dates = res.data.processedDates || [];
+        alert(`Bulk Import Successful! Uploaded and saved ${res.data.count} Excel sheets (${dates[0] || ''} to ${dates[dates.length - 1] || ''}). Both Daily Mill Reports and Partal Reports are now updated in the database.`);
+        if (dates.length > 0) {
+          setReportDate(dates[dates.length - 1]);
+        }
+      } catch (err: any) {
+        console.error(err);
+        alert('Failed to bulk upload Excel sheets: ' + (err.response?.data?.error || err.message));
+      }
+      return;
+    }
     const file = e.target.files[0];
     const formData = new FormData();
     formData.append('file', file);
@@ -186,9 +205,9 @@ export default function DailyMillReport() {
              });
              return newAtt;
            });
-        }
-        alert('Data completely imported! Please review all tables before saving.');
-      }
+         }
+         alert('Data completely imported! Both Report Data Sheet and Partal Report have been updated and saved for date: ' + parsed.report_date);
+       }
     } catch (err) {
       console.error(err);
       alert('Failed to parse Excel file.');
@@ -223,11 +242,22 @@ export default function DailyMillReport() {
                if(!dbRecords || dbRecords.length === 0) return stateGrid;
                const newState = [...stateGrid];
                dbRecords.forEach(dbItem => {
-                  const matchIndex = newState.findIndex(sItem => sItem.product_id === dbItem.product_id);
+                  const matchIndex = newState.findIndex(sItem => 
+                     (sItem.product_id && dbItem.product_id && sItem.product_id === dbItem.product_id) ||
+                     (sItem.name && (dbItem.product_name || dbItem.name) && String(sItem.name).toLowerCase() === String(dbItem.product_name || dbItem.name).toLowerCase())
+                  );
                   if(matchIndex !== -1) {
                      newState[matchIndex].katta = dbItem.katta;
                      newState[matchIndex].qtl = dbItem.qtl;
                      if(dbItem.amount !== undefined) newState[matchIndex].amount = dbItem.amount;
+                  } else if (dbItem.product_name || dbItem.name) {
+                     newState.push({
+                        product_id: dbItem.product_id || 0,
+                        name: dbItem.product_name || dbItem.name,
+                        katta: dbItem.katta || 0,
+                        qtl: dbItem.qtl || 0,
+                        amount: dbItem.amount || 0
+                     });
                   }
                });
                return newState;
@@ -239,16 +269,31 @@ export default function DailyMillReport() {
             setTodaysProduction(prev => updateGrid(prev, r.todays_production));
 
             if(r.salesman_sales && r.salesman_sales.length > 0) {
-               const newSalesmanSales = [...salesmanSales];
-               r.salesman_sales.forEach((ss: any) => {
-                  const idx = newSalesmanSales.findIndex(s => s.salesman_id === ss.salesman_id && s.product_id === ss.product_id);
-                  if(idx !== -1) {
-                     newSalesmanSales[idx].katta = ss.katta;
-                     newSalesmanSales[idx].qtl = ss.qtl;
-                     newSalesmanSales[idx].amount = ss.amount;
-                  }
+               setSalesmanSales(prev => {
+                  const newSalesmanSales = [...prev];
+                  r.salesman_sales.forEach((ss: any) => {
+                     const idx = newSalesmanSales.findIndex(s => 
+                        (s.salesman_id === ss.salesman_id && s.product_id === ss.product_id) ||
+                        (s.salesman_name && ss.salesman_name && s.product_name && ss.product_name && s.salesman_name.toLowerCase() === ss.salesman_name.toLowerCase() && s.product_name.toLowerCase() === ss.product_name.toLowerCase())
+                     );
+                     if(idx !== -1) {
+                        newSalesmanSales[idx].katta = ss.katta;
+                        newSalesmanSales[idx].qtl = ss.qtl;
+                        newSalesmanSales[idx].amount = ss.amount;
+                     } else {
+                        newSalesmanSales.push({
+                           salesman_id: ss.salesman_id || 0,
+                           salesman_name: ss.salesman_name || 'ADITYA JI',
+                           product_id: ss.product_id || 0,
+                           product_name: ss.product_name || ss.name || '',
+                           katta: ss.katta || 0,
+                           qtl: ss.qtl || 0,
+                           amount: ss.amount || 0
+                        });
+                     }
+                  });
+                  return newSalesmanSales;
                });
-               setSalesmanSales(newSalesmanSales);
             }
 
             if(r.attendance && r.attendance.length > 0) {
@@ -329,6 +374,21 @@ export default function DailyMillReport() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete the Daily Mill Report for ${reportDate}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      await api.delete(`/reports/daily/${reportDate}`);
+      alert('Report deleted successfully');
+      setIsExistingReport(false);
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.response?.data?.error || 'Failed to delete report');
+    }
+  };
+
   const handleDownloadPDF = async () => {
     try {
       const res = await api.get(`/pdf/generate/${reportDate}`, { responseType: 'blob' });
@@ -402,10 +462,11 @@ export default function DailyMillReport() {
                 ? 'bg-surface-container-high text-on-surface-variant/50 border-outline-variant/30 cursor-not-allowed'
                 : 'bg-primary-container text-primary border-primary/30 cursor-pointer hover:bg-primary-container/80 hover:shadow-md active:scale-95'
             }`}
+            title="Select 1 sheet or select multiple sheets (e.g. July 1 to Today) to bulk import all dates at once!"
           >
             <span className="material-symbols-outlined text-base">upload_file</span>
-            Import Excel
-            <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isLocked} />
+            Import Excel (Bulk / Single)
+            <input type="file" multiple accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isLocked} />
           </label>
           <div className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-xl border border-outline-variant/40 shadow-sm">
             <span className="material-symbols-outlined text-primary text-base">calendar_today</span>
@@ -417,7 +478,36 @@ export default function DailyMillReport() {
               className="p-1 bg-surface-container-lowest border border-outline-variant/40 rounded-lg text-xs font-bold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
+          {isExistingReport && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="flex items-center gap-1.5 px-4 py-2 bg-error/10 text-error rounded-xl font-bold text-xs sm:text-sm border border-error/30 hover:bg-error hover:text-white transition-all shadow-sm active:scale-95"
+              title="Delete Daily Mill Report for this date"
+            >
+              <span className="material-symbols-outlined text-base">delete</span>
+              Delete Report
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* Unified Tab Switcher: Report Data Sheet | Partal Report */}
+      <div className="flex items-center bg-surface-container-low p-1.5 rounded-2xl border border-outline-variant/40 shadow-sm w-fit mb-6">
+        <Link
+          to={`/daily-mill?date=${reportDate}`}
+          className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm sm:text-base bg-primary text-white shadow-md transition-all"
+        >
+          <span className="material-symbols-outlined text-lg">assessment</span>
+          Report Data Sheet
+        </Link>
+        <Link
+          to={`/padtal?date=${reportDate}`}
+          className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm sm:text-base text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all"
+        >
+          <span className="material-symbols-outlined text-lg">inventory</span>
+          Partal Report
+        </Link>
       </div>
 
       {isLocked && (
@@ -559,8 +649,19 @@ export default function DailyMillReport() {
           </SectionBox>
         </div>
 
-        {/* SUBMIT BUTTON */}
-        <div className="flex justify-end mt-8">
+        {/* SUBMIT & DELETE BUTTONS */}
+        <div className="flex justify-end items-center gap-4 mt-8">
+          {isExistingReport && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-error/10 text-error font-bold text-base sm:text-lg border border-error/30 hover:bg-error hover:text-white shadow-md hover:shadow-lg transition-all active:scale-95"
+              title="Delete Daily Mill Report for this date"
+            >
+              <span className="material-symbols-outlined text-xl">delete</span>
+              Delete Report
+            </button>
+          )}
           <button
              type="submit"
              disabled={isLocked}

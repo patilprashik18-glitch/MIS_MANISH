@@ -7,8 +7,8 @@ router.use(authenticateToken);
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
-// Mill Floor users may only create/edit today's report; Admins can edit any date.
-const canEditDate = (user, report_date) => user.role === 'admin' || report_date === todayStr();
+// Users can create/edit reports for any date without lock
+const canEditDate = (user, report_date) => true;
 
 // --- Audit logging helpers -------------------------------------------------
 // Only edits to an *existing* report are logged (not the initial creation) -
@@ -105,17 +105,24 @@ router.get('/daily/:date', async (req, res) => {
     }
 
     const report_id = report.id;
-    const fetchTable = async (table) => await db(table).where({ report_id });
+    const fetchTable = async (table) => await db(table)
+      .leftJoin('master_products', `${table}.product_id`, 'master_products.id')
+      .where({ report_id })
+      .select(`${table}.*`, 'master_products.name as product_name', 'master_products.name as name');
 
     const finish_stock = await fetchTable('dmr_finish_stock');
     const sales_report = await fetchTable('dmr_sales_report');
     const sales_pending = await fetchTable('dmr_sales_pending');
     const todays_production = await fetchTable('dmr_todays_production');
-    const salesman_sales = await fetchTable('dmr_salesman_sales');
-    const jute_bags = await fetchTable('dmr_jute_bags');
-    const wheat_locations = await fetchTable('dmr_wheat_locations');
-    const attendance = await fetchTable('dmr_attendance');
-    const moisture = await fetchTable('dmr_moisture');
+    const salesman_sales = await db('dmr_salesman_sales')
+      .leftJoin('master_salesmen', 'dmr_salesman_sales.salesman_id', 'master_salesmen.id')
+      .leftJoin('master_products', 'dmr_salesman_sales.product_id', 'master_products.id')
+      .where({ report_id })
+      .select('dmr_salesman_sales.*', 'master_salesmen.name as salesman_name', 'master_products.name as product_name');
+    const jute_bags = await db('dmr_jute_bags').where({ report_id });
+    const wheat_locations = await db('dmr_wheat_locations').where({ report_id });
+    const attendance = await db('dmr_attendance').where({ report_id });
+    const moisture = await db('dmr_moisture').where({ report_id });
     const lab_report = await db('dmr_lab_report').where({ report_id }).first();
 
     res.json({
@@ -184,6 +191,40 @@ router.post('/daily', async (req, res) => {
       report_id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
     }
 
+    const resolveProductId = async (name, existingId) => {
+      if (existingId && Number(existingId) > 0) return Number(existingId);
+      if (!name) return 1;
+      const cleanName = String(name).trim();
+      const existing = await trx('master_products').whereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]).first();
+      if (existing) return existing.id;
+      const inserted = await trx('master_products').insert({ name: cleanName, is_active: 1 }).returning('id');
+      return typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+    };
+
+    const resolveSalesmanId = async (name, existingId) => {
+      if (existingId && Number(existingId) > 0) return Number(existingId);
+      if (!name) return 1;
+      const cleanName = String(name).trim();
+      const existing = await trx('master_salesmen').whereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]).first();
+      if (existing) return existing.id;
+      const inserted = await trx('master_salesmen').insert({ name: cleanName, is_active: 1 }).returning('id');
+      return typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+    };
+
+    const saveRepeatingProducts = async (tableName, dataArray, includeAmount) => {
+      await trx(tableName).where({ report_id }).delete();
+      if (dataArray && dataArray.length > 0) {
+        const rows = [];
+        for (const item of dataArray) {
+          const pid = await resolveProductId(item.name || item.product_name, item.product_id);
+          const row = { report_id, product_id: pid, katta: item.katta || 0, qtl: item.qtl || 0 };
+          if (includeAmount) row.amount = item.amount || 0;
+          rows.push(row);
+        }
+        await trx(tableName).insert(rows);
+      }
+    };
+
     const saveRepeating = async (tableName, dataArray, mapFn) => {
       await trx(tableName).where({ report_id }).delete();
       if (dataArray && dataArray.length > 0) {
@@ -192,11 +233,29 @@ router.post('/daily', async (req, res) => {
       }
     };
 
-    await saveRepeating('dmr_finish_stock', finish_stock, i => ({ product_id: i.product_id, katta: i.katta, qtl: i.qtl }));
-    await saveRepeating('dmr_sales_report', sales_report, i => ({ product_id: i.product_id, katta: i.katta, qtl: i.qtl, amount: i.amount }));
-    await saveRepeating('dmr_sales_pending', sales_pending, i => ({ product_id: i.product_id, katta: i.katta, qtl: i.qtl, amount: i.amount }));
-    await saveRepeating('dmr_todays_production', todays_production, i => ({ product_id: i.product_id, katta: i.katta, qtl: i.qtl }));
-    await saveRepeating('dmr_salesman_sales', salesman_sales, i => ({ salesman_id: i.salesman_id, product_id: i.product_id, katta: i.katta, qtl: i.qtl, amount: i.amount }));
+    await saveRepeatingProducts('dmr_finish_stock', finish_stock, false);
+    await saveRepeatingProducts('dmr_sales_report', sales_report, true);
+    await saveRepeatingProducts('dmr_sales_pending', sales_pending, true);
+    await saveRepeatingProducts('dmr_todays_production', todays_production, false);
+
+    await trx('dmr_salesman_sales').where({ report_id }).delete();
+    if (salesman_sales && salesman_sales.length > 0) {
+      const rows = [];
+      for (const item of salesman_sales) {
+        const smId = await resolveSalesmanId(item.salesman_name, item.salesman_id);
+        const pid = await resolveProductId(item.product_name || item.name, item.product_id);
+        rows.push({
+          report_id,
+          salesman_id: smId,
+          product_id: pid,
+          katta: item.katta || 0,
+          qtl: item.qtl || 0,
+          amount: item.amount || 0
+        });
+      }
+      await trx('dmr_salesman_sales').insert(rows);
+    }
+
     await saveRepeating('dmr_jute_bags', jute_bags, i => ({ bag_type_id: i.bag_type_id, opening: i.opening, received: i.received, used: i.used }));
     await saveRepeating('dmr_wheat_locations', wheat_locations, i => ({ location_id: i.location_id, stock: i.stock }));
     await saveRepeating('dmr_attendance', attendance, i => ({ department: i.department, total: i.total, present: i.present, absent: i.absent }));
@@ -252,8 +311,14 @@ router.get('/padtal/:date', async (req, res) => {
       return res.status(404).json({ message: 'Report not found' });
     }
 
-    const yield_detail = await db('padtal_yield_detail').where({ report_id: report.id });
-    const expenses = await db('padtal_expenses').where({ report_id: report.id });
+    const yield_detail = await db('padtal_yield_detail')
+      .leftJoin('master_products', 'padtal_yield_detail.product_id', 'master_products.id')
+      .where({ report_id: report.id })
+      .select('padtal_yield_detail.*', 'master_products.name as product_name', 'master_products.name as name');
+    const expenses = await db('padtal_expenses')
+      .leftJoin('master_expenses', 'padtal_expenses.expense_id', 'master_expenses.id')
+      .where({ report_id: report.id })
+      .select('padtal_expenses.*', 'master_expenses.name as expense_name', 'master_expenses.name as name');
 
     res.json({
       ...report,
@@ -301,26 +366,54 @@ router.post('/padtal', async (req, res) => {
         report_id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
       }
 
+      const resolveProductId = async (name, existingId) => {
+        if (existingId && Number(existingId) > 0) return Number(existingId);
+        if (!name) return 1;
+        const cleanName = String(name).trim();
+        const existing = await trx('master_products').whereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]).first();
+        if (existing) return existing.id;
+        const inserted = await trx('master_products').insert({ name: cleanName, is_active: 1 }).returning('id');
+        return typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+      };
+
+      const resolveExpenseId = async (name, existingId) => {
+        if (existingId && Number(existingId) > 0) return Number(existingId);
+        if (!name) return 1;
+        const cleanName = String(name).trim();
+        const existing = await trx('master_expenses').whereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]).first();
+        if (existing) return existing.id;
+        const inserted = await trx('master_expenses').insert({ name: cleanName, is_active: 1 }).returning('id');
+        return typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+      };
+
       await trx('padtal_yield_detail').where({ report_id }).delete();
       if (yield_detail && yield_detail.length > 0) {
-        const rows = yield_detail.map(item => ({
-          report_id,
-          product_id: item.product_id,
-          yield_percent: item.yield_percent,
-          rate_per_bag: item.rate_per_bag,
-          rate_per_kg: item.rate_per_kg,
-          avg_rate: item.avg_rate
-        }));
+        const rows = [];
+        for (const item of yield_detail) {
+          const pid = await resolveProductId(item.product_name || item.name, item.product_id);
+          rows.push({
+            report_id,
+            product_id: pid,
+            yield_percent: item.yield_percent || 0,
+            rate_per_bag: item.rate_per_bag || 0,
+            rate_per_kg: item.rate_per_kg || 0,
+            avg_rate: item.avg_rate || 0
+          });
+        }
         await trx('padtal_yield_detail').insert(rows);
       }
 
       await trx('padtal_expenses').where({ report_id }).delete();
       if (expenses && expenses.length > 0) {
-        const rows = expenses.map(item => ({
-          report_id,
-          expense_id: item.expense_id,
-          amount: item.amount
-        }));
+        const rows = [];
+        for (const item of expenses) {
+          const eid = await resolveExpenseId(item.expense_name || item.name, item.expense_id);
+          rows.push({
+            report_id,
+            expense_id: eid,
+            amount: item.amount || 0
+          });
+        }
         await trx('padtal_expenses').insert(rows);
       }
 
@@ -352,5 +445,93 @@ router.post('/padtal', async (req, res) => {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+// Delete Daily Mill Report
+router.delete('/daily/:date', async (req, res) => {
+  const { date } = req.params;
+  if (!canEditDate(req.user, date)) {
+    return res.status(403).json({ error: "Mill Floor users can only delete today's report. Past dates are read-only." });
+  }
+
+  const trx = await db.transaction();
+  try {
+    const report = await trx('daily_mill_reports').where({ report_date: date }).first();
+    if (!report) {
+      await trx.rollback();
+      return res.status(404).json({ error: 'No daily mill report found for this date.' });
+    }
+
+    const report_id = report.id;
+    await trx('dmr_finish_stock').where({ report_id }).delete();
+    await trx('dmr_sales_report').where({ report_id }).delete();
+    await trx('dmr_sales_pending').where({ report_id }).delete();
+    await trx('dmr_todays_production').where({ report_id }).delete();
+    await trx('dmr_salesman_sales').where({ report_id }).delete();
+    await trx('dmr_jute_bags').where({ report_id }).delete();
+    await trx('dmr_wheat_locations').where({ report_id }).delete();
+    await trx('dmr_attendance').where({ report_id }).delete();
+    await trx('dmr_moisture').where({ report_id }).delete();
+    await trx('dmr_lab_report').where({ report_id }).delete();
+    await trx('daily_mill_reports').where({ id: report_id }).delete();
+
+    await trx('audit_log').insert({
+      report_type: 'daily_mill_report',
+      report_id,
+      report_date: date,
+      changed_by: req.user.id,
+      changed_by_email: req.user.email,
+      field_name: 'Report Status',
+      old_value: `Active Report (ID ${report_id})`,
+      new_value: 'Deleted Report'
+    });
+
+    await trx.commit();
+    res.json({ success: true, message: 'Daily Mill Report deleted successfully.' });
+  } catch (error) {
+    await trx.rollback();
+    console.error('Error deleting daily report:', error);
+    res.status(500).json({ error: 'Failed to delete daily mill report.' });
+  }
+});
+
+// Delete Padtal Report
+router.delete('/padtal/:date', async (req, res) => {
+  const { date } = req.params;
+  if (!canEditDate(req.user, date)) {
+    return res.status(403).json({ error: "Users can only delete today's report. Past dates are read-only." });
+  }
+
+  const trx = await db.transaction();
+  try {
+    const report = await trx('padtal_reports').where({ report_date: date }).first();
+    if (!report) {
+      await trx.rollback();
+      return res.status(404).json({ error: 'No padtal report found for this date.' });
+    }
+
+    const report_id = report.id;
+    await trx('padtal_yield_detail').where({ report_id }).delete();
+    await trx('padtal_expenses').where({ report_id }).delete();
+    await trx('padtal_reports').where({ id: report_id }).delete();
+
+    await trx('audit_log').insert({
+      report_type: 'padtal_report',
+      report_id,
+      report_date: date,
+      changed_by: req.user.id,
+      changed_by_email: req.user.email,
+      field_name: 'Report Status',
+      old_value: `Active Report (ID ${report_id})`,
+      new_value: 'Deleted Report'
+    });
+
+    await trx.commit();
+    res.json({ success: true, message: 'Padtal Report deleted successfully.' });
+  } catch (error) {
+    await trx.rollback();
+    console.error('Error deleting padtal report:', error);
+    res.status(500).json({ error: 'Failed to delete padtal report.' });
+  }
+});
 
 export default router;
