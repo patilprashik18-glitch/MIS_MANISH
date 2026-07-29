@@ -410,7 +410,7 @@ router.get('/export/:date', async (req, res) => {
     const report = await db('daily_mill_reports').where({ report_date }).first();
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
-    const fetchTable = async (table) => await db(table).join('products', `${table}.product_id`, 'products.id').where({ report_id: report.id }).select(`${table}.*`, 'products.name as product_name');
+    const fetchTable = async (table) => await db(table).join('master_products', `${table}.product_id`, 'master_products.id').where({ report_id: report.id }).select(`${table}.*`, 'master_products.name as product_name');
     
     const finish_stock = await fetchTable('dmr_finish_stock');
     const sales_report = await fetchTable('dmr_sales_report');
