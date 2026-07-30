@@ -88,18 +88,20 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
         wheat_received: 0 
     };
 
-    const powerRow = findRow('UNIT CONSUMED', 'POWER', 'CONSUMED');
+    const powerRow = findRow('UNIT CONSUMED', 'UNIT PER QTL', 'ELE COST PER BAG');
     if(powerRow !== -1) {
         parentData.power_units = Number(pick(powerRow, 1, 2));
         parentData.power_rate_per_unit = Number(getVal(powerRow+3, 1)) || 0;
     }
 
     const lab_report = { wp: 0, ash: 0, gluten: 0, sedimentation: 0, bread_height: 0 };
-    const labRow = findRow('W.P', 'LAB REPORT', 'QUALITY');
+    const labRow = findRow('W.P');
     if(labRow !== -1) {
        lab_report.wp = parseFloat(pick(labRow, 6, 5)) || 0;
        lab_report.ash = parseFloat(pick(labRow, 9, 8)) || 0;
-       lab_report.gluten = parseFloat(pick(labRow+1, 6, 5)) || 0;
+       let gl = parseFloat(pick(labRow+1, 6, 5)) || 0;
+       if (gl > 0 && gl < 1) gl = Number((gl * 100).toFixed(2));
+       lab_report.gluten = gl;
        lab_report.sedimentation = parseFloat(pick(labRow+1, 9, 8)) || 0;
        lab_report.bread_height = parseFloat(pick(labRow+2, 6, 5)) || 0;
     }
@@ -109,14 +111,33 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
       if(startRow === -1) return arr;
       for(let i = startRow; i < startRow + numRows; i++){
         const name = getStr(i, nameIdx);
-        if(name && !name.toUpperCase().includes('TOTAL') && name !== '0' && name !== 'PRODUCT' && name !== 'PRODUCTS') {
-          arr.push({
-            name,
-            katta: Number(getVal(i, kattaIdx)) || 0,
-            qtl: Number(getVal(i, qtlIdx)) || 0,
-            amount: amtIdx ? (Number(getVal(i, amtIdx)) || 0) : 0
-          });
+        // Stop scanning table immediately when Total row is encountered
+        if (
+          name && (
+            name.toUpperCase().includes('TOTAL') ||
+            name.toUpperCase().includes('टोटल') ||
+            name.toUpperCase().includes('कुल')
+          )
+        ) {
+          break;
         }
+        // Skip invalid rows: empty, numeric values, or non-product headings/labels
+        if (
+          !name ||
+          !isNaN(Number(name)) ||
+          ['0', 'PRODUCT', 'PRODUCTS', 'W.P', 'ASH', 'GLUTEN', 'MAIDA 1', 'MAIDA 2', 'MAIDA 3', 'MAIDA 4', 'MAIDA 5', 'MAIDA 6', 'MAIDA 7', 'MAIDA 8', 'MAIDA 9', 'MAIDA 10', 'MAIDA 11', 'MAIDA 12', 'MAIDA 13', 'MAIDA 14', 'MAIDA 15', 'MAIDA 16', 'MAIDA 17', 'MAIDA 18', 'MAIDA 19', 'MAIDA 20', 'MAIDA 21', 'MAIDA 22', 'MAIDA 23', 'MAIDA 24', 'MAIDA 25', 'MAIDA 26', 'MAIDA 27', 'MAIDA 28', 'MAIDA 29', 'MAIDA 31', 'मिल पिसाई', 'चक्की पिसाई', 'टोटल मिल औरचक्की'].includes(name) ||
+          name.toUpperCase().includes('GRINDING') ||
+          name.toUpperCase().includes('पिसाई') ||
+          name.toUpperCase().includes('चक्की')
+        ) {
+          continue;
+        }
+        arr.push({
+          name,
+          katta: Number(getVal(i, kattaIdx)) || 0,
+          qtl: Number(getVal(i, qtlIdx)) || 0,
+          amount: amtIdx ? (Number(getVal(i, amtIdx)) || 0) : 0
+        });
       }
       return arr;
     };
@@ -124,47 +145,103 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
     const finishRow = findRow('FINISH STOCK', 'FINISH  STOCK', 'FINISH');
     const finishStart = finishRow !== -1 ? finishRow + 2 : 5;
     
-    const finish_stock = parseGrid2D(finishStart, 16, 0, 2, 3);
+    const finish_stock = parseGrid2D(finishStart, 16, 0, 1, 3);
     const sales_report = parseGrid2D(finishStart, 16, 5, 6, 8, 10);
     const sales_pending = parseGrid2D(finishStart, 16, 11, 12, 14, 15);
     const todays_production = parseGrid2D(pRow, 16, 5, 6, 8);
 
-    // Salesman Wise Sales
+    // Salesman Wise Sales (Pivot Matrix in Columns K to P)
     const salesman_sales = [];
-    const smRow = findRow('SALESMAN', 'PARTY WISE', 'SALESMAN WISE');
-    const smStart = smRow !== -1 ? smRow + 2 : -1;
-    if (smStart !== -1) {
-      for (let i = smStart; i < smStart + 35; i++) {
-        const smName = getStr(i, 0) || getStr(i, 1);
-        const prodName = getStr(i, 1) || getStr(i, 2);
-        if (smName && !smName.toUpperCase().includes('TOTAL') && smName !== 'SALESMAN' && prodName && !prodName.toUpperCase().includes('TOTAL')) {
-          salesman_sales.push({
-            salesman_name: smName,
-            product_name: prodName,
-            katta: Number(getVal(i, 2)) || Number(getVal(i, 3)) || 0,
-            qtl: Number(getVal(i, 3)) || Number(getVal(i, 4)) || 0,
-            amount: Number(getVal(i, 4)) || Number(getVal(i, 5)) || 0
-          });
+    const smHeaderIdx = findRow('Row Labels', 'ADITYA', 'KAILASH SHARMA');
+    if (smHeaderIdx !== -1) {
+      const headerRow = rows[smHeaderIdx] || [];
+      const salesmenCols = [];
+      for (let c = 11; c < headerRow.length; c++) {
+        const name = String(headerRow[c] || '').trim();
+        if (name && !name.toUpperCase().includes('TOTAL')) {
+          salesmenCols.push({ col: c, salesman_name: name });
+        }
+      }
+      for (let r = smHeaderIdx + 1; r < smHeaderIdx + 25; r++) {
+        const prodName = getStr(r, 10) || getStr(r, 11);
+        if (!prodName || prodName.toUpperCase().includes('TOTAL')) break;
+        if (['0', 'Row Labels'].includes(prodName)) continue;
+        for (const sm of salesmenCols) {
+          const val = Number(getVal(r, sm.col)) || 0;
+          if (val > 0) {
+            salesman_sales.push({
+              salesman_name: sm.salesman_name,
+              product_name: prodName,
+              katta: val,
+              qtl: val * 0.5,
+              amount: 0
+            });
+          }
         }
       }
     }
 
-    const attRow = findRow('PRESENT', 'ATTENDANCE');
     const attendance = [];
-    if(attRow !== -1) {
-        for(let i=attRow+1; i<=attRow+8; i++) {
-            const dept = getStr(i, 0);
-            if(dept && !dept.toUpperCase().includes('TOTAL')) {
-                attendance.push({
-                    department: dept,
-                    present: Number(getVal(i, 3)) || 0,
-                    absent: Number(getVal(i, 4)) || 0
-                });
-            }
+    const attStartIdx = rows.findIndex(r => r && (
+      String(r[0] || '').trim().toUpperCase() === 'ADMIN' ||
+      String(r[0] || '').trim().toUpperCase() === 'MILL STAFF' ||
+      (String(r[0] || '').trim().toUpperCase() === 'ATTENDANCE' && r.some(c => String(c).toUpperCase().includes('PRESENT')))
+    ));
+    if (attStartIdx !== -1) {
+      const startRow = String(rows[attStartIdx][0] || '').trim().toUpperCase() === 'ATTENDANCE' ? attStartIdx + 1 : attStartIdx;
+      for (let i = startRow; i < startRow + 10; i++) {
+        const dept = getStr(i, 0);
+        if (!dept || dept.toUpperCase().includes('TOTAL') || dept.toUpperCase().includes('ATTENDANCE')) {
+          if (dept.toUpperCase().includes('TOTAL') && i > startRow) break;
+          continue;
         }
+        const present = Number(getVal(i, 3)) || Number(getVal(i, 2)) || 0;
+        const absent = Number(getVal(i, 4)) || 0;
+        const total = Number(getVal(i, 1)) || (present + absent);
+        attendance.push({
+          department: dept,
+          total: total,
+          present: present,
+          absent: absent
+        });
+      }
     }
 
-  const padtal_data = { yield_detail: [], expenses: [], wheat_rate: 0 };
+    const moisture_report = [];
+    const moistStartIdx = findRow('MOISTURE', 'WHEAT MOISTURE') !== -1 ? findRow('MOISTURE', 'WHEAT MOISTURE') + 1 : -1;
+    if (moistStartIdx !== -1) {
+      for (let i = moistStartIdx; i < moistStartIdx + 12; i++) {
+        const item = getStr(i, 0);
+        if (!item || item.toUpperCase().includes('TOTAL') || item.toUpperCase().includes('WHEAT MOISTURE') || item.toUpperCase().includes('DIFFERENCE')) {
+          if (item.toUpperCase().includes('TOTAL') && i > moistStartIdx) break;
+          continue;
+        }
+        let m1 = Number(getVal(i, 1)) || 0;
+        let m2 = Number(getVal(i, 2)) || 0;
+        let avg = Number(getVal(i, 3)) || 0;
+        if (m1 > 0 && m1 < 1) m1 = Number((m1 * 100).toFixed(2));
+        if (m2 > 0 && m2 < 1) m2 = Number((m2 * 100).toFixed(2));
+        if (avg > 0 && avg < 1) avg = Number((avg * 100).toFixed(2));
+
+        moisture_report.push({
+          item_name: item,
+          maida_1: m1,
+          maida_2: m2,
+          average: avg
+        });
+      }
+    }
+
+  const padtal_data = {
+    yield_detail: [],
+    expenses: [],
+    wheat_rate: 0,
+    wheat_net_avg_rate: 0,
+    grinding_expense: 250,
+    moisture_adjustment: 0,
+    final_margin: 0
+  };
+
   if (padtalRows.length > 0) {
     let yieldSectionStart = -1;
     let expSectionStart = -1;
@@ -182,7 +259,23 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
         const cell = String(row[c]).trim().toUpperCase();
         if (cell.includes('WHEAT RATE') || cell.includes('WHEAT COST')) {
           const val = Number(row[c + 1]) || Number(row[c + 2]) || 0;
-          if (val > 0) padtal_data.wheat_rate = val;
+          if (val > 0 && !cell.includes('LESS') && !cell.includes('AVG')) padtal_data.wheat_rate = val;
+        }
+        if (cell.includes('WHEAT NET AVG RATE') || cell.includes('WHEAT RATE LESS 4%')) {
+          const val = Number(row[c + 1]) || Number(row[c + 2]) || 0;
+          if (val !== 0) padtal_data.wheat_net_avg_rate = val;
+        }
+        if (cell === 'GRD EXP.' || cell.includes('GRD EXP') || cell.includes('GRINDING EXP')) {
+          const val = Number(row[c + 1]) || Number(row[c + 2]) || 0;
+          if (val !== 0) padtal_data.grinding_expense = val;
+        }
+        if (cell.includes('MOISTURE @ 3%') || cell.includes('MOISTURE @')) {
+          const val = Number(row[c + 1]) || Number(row[c + 2]) || 0;
+          if (val !== 0) padtal_data.moisture_adjustment = val;
+        }
+        if (cell === 'FINAL' || cell.startsWith('FINAL ')) {
+          const val = Number(row[c + 1]) || Number(row[c + 2]) || 0;
+          if (val !== 0) padtal_data.final_margin = val;
         }
       }
     }
@@ -193,12 +286,16 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
         if (!row || !row[0]) continue;
         const pName = String(row[0]).trim();
         if (pName.toUpperCase().includes('TOTAL') || pName.toUpperCase().includes('REALIZATION')) break;
+        const yPct = Number(row[2]) || 0;
+        const rBag = Number(row[3]) || 0;
+        const rKg = Number(row[4]) || 0;
+        const aRate = yPct > 0 ? (Number(row[5]) || 0) : 0;
         padtal_data.yield_detail.push({
           product_name: pName,
-          yield_percent: Number(row[1]) || 0,
-          rate_per_bag: Number(row[2]) || 0,
-          rate_per_kg: Number(row[3]) || 0,
-          avg_rate: Number(row[4]) || 0
+          yield_percent: yPct,
+          rate_per_bag: rBag,
+          rate_per_kg: rKg,
+          avg_rate: aRate
         });
       }
     }
@@ -218,12 +315,119 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
   }
 
   try {
+    // ── Product name normalization map ──
+    // All variant spellings → one canonical name (Column 2 from master sheet)
+    const PRODUCT_ALIASES = {
+      // MAIDA PREMIUM 50 KG
+      'MAIDA BAKERY':               'MAIDA PREMIUM 50 KG',
+      'MAIDA BAKERY 50KG':          'MAIDA PREMIUM 50 KG',
+      'MAIDA -I ( 50 KG )':         'MAIDA PREMIUM 50 KG',
+      'MAIDA -I (50 KG)':           'MAIDA PREMIUM 50 KG',
+      'MAIDA-I (50 KG)':            'MAIDA PREMIUM 50 KG',
+      'MAIDA -I':                   'MAIDA PREMIUM 50 KG',
+      'MAIDA I':                    'MAIDA PREMIUM 50 KG',
+      // MAIDA 30KG
+      'MAIDA 30':                   'MAIDA 30KG',
+      'MAIDA-30':                   'MAIDA 30KG',
+      // MAIDA LEMINATION
+      'MAIDA LEMINATION 50 KG':     'MAIDA LEMINATION',
+      'MAIDA LEMINATION ) 50 KG':   'MAIDA LEMINATION',
+      'MAIDA LEMINATION) 50 KG':    'MAIDA LEMINATION',
+      'MAIDA LAMINATION':           'MAIDA LEMINATION',
+      'MAIDA LAMINATION 50 KG':     'MAIDA LEMINATION',
+      // REFINED WHEAT FLOUR (MAIDA) 50KG
+      'REFINED WHEAT FLOUR (MAIDA)':'REFINED WHEAT FLOUR (MAIDA) 50KG',
+      'REFINED WHEAT FLOUR MAIDA':  'REFINED WHEAT FLOUR (MAIDA) 50KG',
+      'REFINED WHEAT FLOUR':        'REFINED WHEAT FLOUR (MAIDA) 50KG',
+      // SOOJI 50 KG
+      'SOOJI50':                    'SOOJI 50 KG',
+      'SOOJI 50':                   'SOOJI 50 KG',
+      'SOOJI ( 50 KG )':            'SOOJI 50 KG',
+      'SOOJI (50 KG)':              'SOOJI 50 KG',
+      'SOOJI ( 50 KG)':             'SOOJI 50 KG',
+      // Sooji 30 Kgs
+      'SOOJI30':                    'Sooji 30 Kgs',
+      'SOOJI 30':                   'Sooji 30 Kgs',
+      'SOOJI 30 KG':                'Sooji 30 Kgs',
+      'SOOJI 30 KGS':               'Sooji 30 Kgs',
+      // Rawa 50 kg
+      'RAWA 50':                    'Rawa 50 kg',
+      'RAWA (50 KG )':              'Rawa 50 kg',
+      'RAWA (50 KG)':               'Rawa 50 kg',
+      'RAWA50':                     'Rawa 50 kg',
+      // Rawa 30 Kg
+      'RAWA 30':                    'Rawa 30 Kg',
+      'RAWA30':                     'Rawa 30 Kg',
+      'RAWA 30 KG':                 'Rawa 30 Kg',
+      // TANDORI MAIDA 50 KG
+      'TM50':                       'TANDORI MAIDA 50 KG',
+      'T-ATTA (50 KG )':            'TANDORI MAIDA 50 KG',
+      'T-ATTA (50 KG)':             'TANDORI MAIDA 50 KG',
+      'TATTA (50 KG)':              'TANDORI MAIDA 50 KG',
+      'TATTA':                      'TANDORI MAIDA 50 KG',
+      'T-ATTA':                     'TANDORI MAIDA 50 KG',
+      // FINE BRAN 40 KG
+      'BRAN FINE 40 KG':            'FINE BRAN 40 KG',
+      'FINE BRAN 40KG':             'FINE BRAN 40 KG',
+      'BRAN FINE 40KG':             'FINE BRAN 40 KG',
+      // R-BRAN ( 39 KG )
+      'COURS BRAN':                 'R-BRAN ( 39 KG )',
+      'COARSE BRAN':                'R-BRAN ( 39 KG )',
+      'R-BRAN ( 39 KG )':           'R-BRAN ( 39 KG )',
+      'R-BRAN (39 KG)':             'R-BRAN ( 39 KG )',
+      'R-BRAN':                     'R-BRAN ( 39 KG )',
+      'BRAN ROUGH 39 KG':           'R-BRAN ( 39 KG )',
+      'BRAN ROUGH 39 KG-NON BRANDED':'R-BRAN ( 39 KG )',
+      // Bran Fine 49 KG
+      'FINE BRAN':                  'Bran Fine 49 KG',
+      'FINE BRAN ( 49 KG )':        'Bran Fine 49 KG',
+      'FINE BRAN (49 KG)':          'Bran Fine 49 KG',
+      'FINE BRAN 49 KG':            'Bran Fine 49 KG',
+      'FINE BRAN ( 49 KG)':         'Bran Fine 49 KG',
+      'BRAN FINE 49 KG':            'Bran Fine 49 KG',
+      'BRAN FINE 49KG':             'Bran Fine 49 KG',
+      // DELUX BRAN 49KG
+      'DELUX BRAN':                 'DELUX BRAN 49KG',
+      'DELUXE BRAN ( 49 KG )':      'DELUX BRAN 49KG',
+      'DELUXE BRAN (49 KG)':        'DELUX BRAN 49KG',
+      'DELUXE BRAN':                'DELUX BRAN 49KG',
+      'S. DELUXE BRAN ( 49 KG )':   'DELUX BRAN 49KG',
+      'S. DELUXE BRAN (49 KG)':     'DELUX BRAN 49KG',
+      'S.DELUXE BRAN':              'DELUX BRAN 49KG',
+      'SUPER DELUX BRAN 49KG':      'DELUX BRAN 49KG',
+      'SUPER DELUXE BRAN':          'DELUX BRAN 49KG',
+      // POWER MESS ( C F )
+      'POWER MESH 50 KG':           'POWER MESS ( C F )',
+      'POWER MESH':                 'POWER MESS ( C F )',
+      'POWER MESS':                 'POWER MESS ( C F )',
+      'POWER MESS (CF)':            'POWER MESS ( C F )',
+      // MAIDA -II aliases
+      'MAIDA -II ( 50 KG )':        'MAIDA',
+      'MAIDA -II (50 KG)':          'MAIDA',
+      'MAIDA -II':                  'MAIDA',
+      'MAIDA II':                   'MAIDA',
+      // SUPER FINE BRAN
+      'SUPER FINE BRAN':            'SUPER FINE BRAN',
+    };
+
+    // Build a case-insensitive lookup from the aliases
+    const aliasLookup = {};
+    for (const [variant, canonical] of Object.entries(PRODUCT_ALIASES)) {
+      aliasLookup[variant.toUpperCase().replace(/\s+/g, ' ').trim()] = canonical;
+    }
+
+    const normalizeProductName = (rawName) => {
+      if (!rawName) return rawName;
+      const key = String(rawName).toUpperCase().replace(/\s+/g, ' ').trim();
+      return aliasLookup[key] || String(rawName).trim();
+    };
+
     const getPid = async (name) => {
       if (!name) return 1;
-      const cleanName = String(name).trim();
-      const existing = await db('master_products').whereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]).first();
+      const canonicalName = normalizeProductName(name);
+      const existing = await db('master_products').whereRaw('LOWER(name) = ?', [canonicalName.toLowerCase()]).first();
       if (existing) return existing.id;
-      const [newPid] = await db('master_products').insert({ name: cleanName, is_active: 1 });
+      const [newPid] = await db('master_products').insert({ name: canonicalName, is_active: 1 });
       return typeof newPid === 'object' ? newPid.id : newPid;
     };
 
@@ -246,15 +450,23 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
     };
 
     let padtalReport = await db('padtal_reports').where({ report_date }).first();
+    const padtalSummaryData = {
+      wheat_rate: padtal_data.wheat_rate || 0,
+      wheat_net_avg_rate: padtal_data.wheat_net_avg_rate || 0,
+      grinding_expense: padtal_data.grinding_expense || 250,
+      moisture_adjustment: padtal_data.moisture_adjustment || 0,
+      final_margin: padtal_data.final_margin || 0
+    };
+
     if (padtalReport) {
       await db('padtal_reports').where({ id: padtalReport.id }).update({
-        wheat_rate: padtal_data.wheat_rate || 0,
+        ...padtalSummaryData,
         updated_at: db.fn.now()
       });
     } else {
       const [newId] = await db('padtal_reports').insert({
         report_date,
-        wheat_rate: padtal_data.wheat_rate || 0,
+        ...padtalSummaryData,
         difference_percent: 0,
         created_by: user ? user.id : 1
       });
@@ -355,6 +567,17 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
         const rows = attendance.map(a => ({ report_id: dmrId, department: a.department || '', total: a.total || 0, present: a.present || 0, absent: a.absent || 0 }));
         await db('dmr_attendance').insert(rows);
       }
+      if (moisture_report && moisture_report.length > 0) {
+        await db('dmr_moisture').where({ report_id: dmrId }).del();
+        const rows = moisture_report.map(m => ({
+          report_id: dmrId,
+          item_name: m.item_name || '',
+          maida_1: m.maida_1 || 0,
+          maida_2: m.maida_2 || 0,
+          average: m.average || 0
+        }));
+        await db('dmr_moisture').insert(rows);
+      }
       if (lab_report) {
         await db('dmr_lab_report').where({ report_id: dmrId }).del();
         await db('dmr_lab_report').insert({ report_id: dmrId, ...lab_report });
@@ -364,7 +587,7 @@ async function parseAndSaveExcel(buffer, originalname, db, user) {
     console.error('Auto-save Reports note:', dbErr.message);
   }
 
-  return { report_date, parentData, lab_report, finish_stock, sales_report, sales_pending, todays_production, attendance, salesman_sales, padtal_data };
+  return { report_date, parentData, lab_report, moisture_report, finish_stock, sales_report, sales_pending, todays_production, attendance, salesman_sales, padtal_data };
 }
 
 router.post('/upload', upload.single('file'), async (req, res) => {
@@ -490,7 +713,7 @@ router.get('/export/:date', async (req, res) => {
     const finishRow = findRowIdx('FINISH  STOCK');
     const fStart = finishRow !== -1 ? finishRow + 2 : 5;
     
-    injectGrid(fStart, 1, 3, 4, null, finish_stock); // A=1, C=3, D=4
+    injectGrid(fStart, 1, 2, 4, null, finish_stock); // A=1, B=2, D=4
     injectGrid(fStart, 6, 7, 9, 11, sales_report);   // F=6, G=7, I=9, K=11
     injectGrid(fStart, 12, 13, 15, 16, sales_pending); // L=12, M=13, O=15, P=16
 
@@ -516,7 +739,11 @@ router.get('/export/:date', async (req, res) => {
     const powerRow = findRowIdx('UNIT CONSUMED');
     if (powerRow !== -1) {
         sheet.getRow(powerRow).getCell(2).value = report.power_units;
+        sheet.getRow(powerRow).getCell(4).value = report.power_units;
+        sheet.getRow(powerRow+1).getCell(2).value = report.mill_grinding;
+        sheet.getRow(powerRow+1).getCell(4).value = report.mill_grinding;
         sheet.getRow(powerRow+3).getCell(2).value = report.power_rate_per_unit;
+        sheet.getRow(powerRow+3).getCell(4).value = report.power_rate_per_unit;
     }
 
     const labRow = findRowIdx('W.P');
@@ -528,19 +755,114 @@ router.get('/export/:date', async (req, res) => {
         sheet.getRow(labRow+2).getCell(6).value = lab_report.bread_height;
     }
 
-    const attRow = findRowIdx('ATTENDANCE');
-    if (attRow !== -1 && attendance) {
-        for(let r = attRow+2; r <= attRow+9; r++) {
+    let presentRow = -1;
+    sheet.eachRow((row, rIdx) => {
+      row.eachCell(cell => {
+        if (String(cell.value).toUpperCase().includes('PRESENT')) presentRow = rIdx;
+      });
+    });
+    if (presentRow !== -1 && attendance) {
+        for(let r = presentRow+1; r <= presentRow+10; r++) {
             const row = sheet.getRow(r);
             const dept = String(row.getCell(1).value || '').trim();
             if(dept && !dept.toUpperCase().includes('TOTAL')) {
                 const dbAtt = attendance.find(a => a.department.toUpperCase() === dept.toUpperCase());
                 if(dbAtt) {
+                    row.getCell(2).value = dbAtt.total || 0;
                     row.getCell(4).value = dbAtt.present || 0;
                     row.getCell(5).value = dbAtt.absent || 0;
                 }
             }
         }
+    }
+
+    // Salesman Wise Sales Report Export (Columns K to P)
+    const smLabelRow = findRowIdx('Row Labels');
+    if (smLabelRow !== -1) {
+      const headerRow = sheet.getRow(smLabelRow);
+      const smCols = [];
+      headerRow.eachCell((cell, colNumber) => {
+        if (colNumber > 10 && cell.value && !String(cell.value).toUpperCase().includes('TOTAL')) {
+          smCols.push({ colIdx: colNumber, name: String(cell.value).trim() });
+        }
+      });
+      const salesman_sales = await db('dmr_salesman_sales').join('master_salesmen', 'dmr_salesman_sales.salesman_id', 'master_salesmen.id').join('master_products', 'dmr_salesman_sales.product_id', 'master_products.id').where({ report_id: report.id }).select('dmr_salesman_sales.*', 'master_salesmen.name as salesman_name', 'master_products.name as product_name');
+      for (let r = smLabelRow + 1; r <= smLabelRow + 25; r++) {
+        const row = sheet.getRow(r);
+        const prodName = String(row.getCell(11).value || row.getCell(10).value || '').trim();
+        if (!prodName || prodName.toUpperCase().includes('TOTAL')) break;
+        for (const sm of smCols) {
+          const match = salesman_sales.find(s => s.salesman_name.toLowerCase().includes(sm.name.toLowerCase()) && s.product_name.toLowerCase().includes(prodName.toLowerCase()));
+          if (match) {
+            row.getCell(sm.colIdx).value = match.katta || 0;
+          }
+        }
+      }
+    }
+
+    // Moisture Report Export
+    const moistureRow = findRowIdx('MOISTURE');
+    if (moistureRow !== -1) {
+      const moistures = await db('dmr_moisture').join('master_products', 'dmr_moisture.product_id', 'master_products.id').where({ report_id: report.id }).select('dmr_moisture.*', 'master_products.name as product_name');
+      for (let r = moistureRow + 1; r <= moistureRow + 12; r++) {
+        const row = sheet.getRow(r);
+        const prodLabel = String(row.getCell(1).value || '').trim();
+        if (!prodLabel || prodLabel.toUpperCase().includes('TOTAL')) break;
+        const match = moistures.find(m => m.product_name.toLowerCase().includes(prodLabel.toLowerCase()));
+        if (match) {
+          row.getCell(2).value = match.moisture_percent || 0;
+        }
+      }
+    }
+
+    // PARTAL REPORT Worksheet Export
+    const padtalSheet = workbook.worksheets.find(w => w.name.toUpperCase().includes('PARTAL') || w.name.toUpperCase().includes('PADTAL')) || workbook.worksheets[1];
+    if (padtalSheet) {
+      const padtalReport = await db('padtal_reports').where({ report_date }).first();
+      if (padtalReport) {
+        const yield_detail = await db('padtal_yield_detail').join('master_products', 'padtal_yield_detail.product_id', 'master_products.id').where({ report_id: padtalReport.id }).select('padtal_yield_detail.*', 'master_products.name as product_name');
+        
+        let productsRow = -1;
+        padtalSheet.eachRow((row, rNumber) => {
+          row.eachCell(cell => {
+            if (String(cell.value).toUpperCase().includes('PRODUCTS') || String(cell.value).toUpperCase().includes('YIELD IN')) {
+              productsRow = rNumber;
+            }
+          });
+        });
+
+        if (productsRow !== -1) {
+          for (let r = productsRow + 1; r <= productsRow + 15; r++) {
+            const row = padtalSheet.getRow(r);
+            const prodName = String(row.getCell(1).value || '').trim();
+            if (!prodName || prodName.toUpperCase().includes('TOTAL') || prodName.toUpperCase().includes('REALIZATION')) break;
+            const match = yield_detail.find(y => y.product_name.toLowerCase().replace(/\s/g,'').includes(prodName.toLowerCase().replace(/\s/g,'')) || prodName.toLowerCase().replace(/\s/g,'').includes(y.product_name.toLowerCase().replace(/\s/g,'')));
+            if (match) {
+              row.getCell(3).value = match.yield_percent || 0;
+              row.getCell(4).value = match.rate_per_bag || 0;
+              row.getCell(5).value = match.rate_per_kg || 0;
+              row.getCell(6).value = match.avg_rate || 0;
+            }
+          }
+        }
+
+        let wheatRateRow = -1;
+        padtalSheet.eachRow((row, rNumber) => {
+          row.eachCell(cell => {
+            if (String(cell.value).toUpperCase().includes('WHEAT RATE') || String(cell.value).toUpperCase().includes('WHEAT NET')) {
+              wheatRateRow = rNumber;
+            }
+          });
+        });
+        if (wheatRateRow !== -1) {
+          const wRow = padtalSheet.getRow(wheatRateRow);
+          wRow.eachCell((cell, cIdx) => {
+            if (!isNaN(Number(cell.value)) && Number(cell.value) > 100) {
+              cell.value = padtalReport.wheat_rate || 0;
+            }
+          });
+        }
+      }
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

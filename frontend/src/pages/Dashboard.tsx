@@ -114,55 +114,58 @@ export default function Dashboard() {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        {/* KPI 1 */}
+        {/* KPI 1 - Total Grinding */}
         <div className="glass-card p-6 rounded-2xl flex flex-col">
           <div className="flex justify-between items-start mb-4">
             <div className="p-3 bg-primary/10 rounded-xl">
               <span className="material-symbols-outlined text-primary">precision_manufacturing</span>
             </div>
             <span className="text-green-600 font-semibold text-xs flex items-center gap-1 bg-green-50 px-2.5 py-1 rounded-full">
-              <span className="material-symbols-outlined text-sm">trending_up</span> Live
+              <span className="material-symbols-outlined text-sm">trending_up</span> Monthly
             </span>
           </div>
-          <p className="text-on-surface-variant text-sm font-medium">Latest Total Grinding</p>
+          <p className="text-on-surface-variant text-sm font-medium">{data.kpis.monthName || 'This Month'} — Total Grinding</p>
           <h3 className="font-display-lg text-3xl font-bold my-1 text-on-surface">
-            {data.kpis.grinding} <span className="text-lg font-normal text-on-surface-variant">Qtl</span>
+            {Number(data.kpis.grinding).toLocaleString()} <span className="text-lg font-normal text-on-surface-variant">Qtl</span>
           </h3>
+          <p className="text-xs text-on-surface-variant/70 mt-1">{data.kpis.reportCount || 0} reports</p>
         </div>
 
-        {/* KPI 2 */}
+        {/* KPI 2 - Total Power */}
         <div className="glass-card p-6 rounded-2xl flex flex-col">
           <div className="flex justify-between items-start mb-4">
             <div className="p-3 bg-amber-50 rounded-xl">
               <span className="material-symbols-outlined text-amber-600">bolt</span>
             </div>
             <span className="text-amber-600 font-semibold text-xs flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-full">
-              <span className="material-symbols-outlined text-sm">electric_meter</span> Power
+              <span className="material-symbols-outlined text-sm">electric_meter</span> Monthly
             </span>
           </div>
-          <p className="text-on-surface-variant text-sm font-medium">Latest Power Units</p>
+          <p className="text-on-surface-variant text-sm font-medium">{data.kpis.monthName || 'This Month'} — Total Power</p>
           <h3 className="font-display-lg text-3xl font-bold my-1 text-on-surface">
-            {data.kpis.power} <span className="text-lg font-normal text-on-surface-variant">kWh</span>
+            {Number(data.kpis.power).toLocaleString()} <span className="text-lg font-normal text-on-surface-variant">kWh</span>
           </h3>
+          <p className="text-xs text-on-surface-variant/70 mt-1">{data.kpis.reportCount || 0} reports</p>
         </div>
 
-        {/* KPI 3 */}
+        {/* KPI 3 - Total Sales */}
         <div className="glass-card p-6 rounded-2xl flex flex-col">
           <div className="flex justify-between items-start mb-4">
             <div className="p-3 bg-emerald-50 rounded-xl">
               <span className="material-symbols-outlined text-emerald-600">payments</span>
             </div>
             <span className="text-emerald-600 font-semibold text-xs flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-full">
-              <span className="material-symbols-outlined text-sm">verified</span> Sales
+              <span className="material-symbols-outlined text-sm">verified</span> Monthly
             </span>
           </div>
-          <p className="text-on-surface-variant text-sm font-medium">Latest Total Sales</p>
+          <p className="text-on-surface-variant text-sm font-medium">{data.kpis.monthName || 'This Month'} — Total Sales</p>
           <h3 className="font-display-lg text-3xl font-bold my-1 text-on-surface">
-            ₹ {data.kpis.sales.toLocaleString()}
+            ₹ {Number(data.kpis.sales).toLocaleString()}
           </h3>
+          <p className="text-xs text-on-surface-variant/70 mt-1">{data.kpis.reportCount || 0} reports</p>
         </div>
 
-        {/* KPI 4 */}
+        {/* KPI 4 - Avg Moisture */}
         <div className="glass-card p-6 rounded-2xl flex flex-col">
           <div className="flex justify-between items-start mb-4">
             <div className={`p-3 rounded-xl ${isMoistureOutOfRange(data.kpis.moisture) ? 'bg-red-50' : 'bg-primary/10'}`}>
@@ -175,7 +178,7 @@ export default function Dashboard() {
               {isMoistureOutOfRange(data.kpis.moisture) ? 'Alert' : 'Normal'}
             </span>
           </div>
-          <p className="text-on-surface-variant text-sm font-medium">Latest Avg Moisture</p>
+          <p className="text-on-surface-variant text-sm font-medium">{data.kpis.monthName || 'This Month'} — Avg Moisture</p>
           <h3 className="font-display-lg text-3xl font-bold my-1 text-on-surface">
             {data.kpis.moisture} <span className="text-lg font-normal text-on-surface-variant">%</span>
           </h3>
@@ -262,10 +265,10 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Recent Reports Table */}
+      {/* All Daily Mill Reports Table */}
       <div className="bg-white p-6 rounded-xl shadow-sm overflow-hidden w-full max-w-full">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-brand font-headline-md">Recent Reports</h2>
+          <h2 className="text-lg font-semibold text-brand font-headline-md">All Daily Mill Reports</h2>
           <Link to="/daily-mill" className="text-brand hover:underline text-sm font-medium">+ New Report</Link>
         </div>
         <div className="overflow-x-auto w-full max-w-full">
@@ -321,10 +324,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Padtal Reports Table */}
+      {/* All Padtal Reports Table */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold font-headline-md text-gray-800">Recent Padtal Reports</h2>
+          <h2 className="text-lg font-bold font-headline-md text-gray-800">All Padtal Reports</h2>
           <Link to="/padtal" className="text-brand hover:underline text-sm font-medium">+ New Padtal</Link>
         </div>
         <div className="overflow-x-auto w-full max-w-full">

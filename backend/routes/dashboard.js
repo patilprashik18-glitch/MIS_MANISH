@@ -7,25 +7,45 @@ router.use(authenticateToken);
 
 router.get('/stats', async (req, res) => {
   try {
-    // Get latest report for KPIs
-    const latestReport = await db('daily_mill_reports').orderBy('report_date', 'desc').first();
+    // Get current month boundaries for KPIs
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+    const monthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    const monthReports = await db('daily_mill_reports')
+      .whereBetween('report_date', [monthStart, monthEnd]);
+    const monthReportIds = monthReports.map(r => r.id);
+
     let kpis = {
       grinding: 0,
       power: 0,
       sales: 0,
-      moisture: 0
+      moisture: 0,
+      monthName,
+      reportCount: monthReports.length
     };
 
-    if (latestReport) {
-      kpis.grinding = Number(latestReport.mill_grinding) + Number(latestReport.chakki_grinding);
-      kpis.power = Number(latestReport.power_units);
-      kpis.moisture = Number(latestReport.moisture_average_percent);
-      
-      const sales = await db('dmr_sales_report')
-        .where('report_id', latestReport.id)
-        .sum('amount as total');
-      kpis.sales = sales[0].total || 0;
+    if (monthReports.length > 0) {
+      kpis.grinding = monthReports.reduce((sum, r) => sum + Number(r.mill_grinding || 0) + Number(r.chakki_grinding || 0), 0);
+      kpis.power = monthReports.reduce((sum, r) => sum + Number(r.power_units || 0), 0);
+
+      const moistureVals = monthReports.map(r => Number(r.moisture_average_percent || 0)).filter(v => v > 0);
+      kpis.moisture = moistureVals.length > 0
+        ? Number((moistureVals.reduce((a, b) => a + b, 0) / moistureVals.length).toFixed(2))
+        : 0;
+
+      if (monthReportIds.length > 0) {
+        const salesSum = await db('dmr_sales_report')
+          .whereIn('report_id', monthReportIds)
+          .sum('amount as total')
+          .first();
+        kpis.sales = Number(salesSum?.total || 0);
+      }
     }
+
+    // Keep latestReport reference for breakdowns below
+    const latestReport = await db('daily_mill_reports').orderBy('report_date', 'desc').first();
 
     // Get trend data (last 30 days)
     const thirtyDaysAgo = new Date();
@@ -125,16 +145,14 @@ router.get('/stats', async (req, res) => {
       chartsConfig = [];
     }
 
-    // Get recent 5 reports
+    // Get all reports
     const recentReports = await db('daily_mill_reports')
-      .orderBy('report_date', 'desc')
-      .limit(5);
+      .orderBy('report_date', 'desc');
 
     let recentPadtalReports = [];
     try {
       recentPadtalReports = await db('padtal_reports')
-        .orderBy('report_date', 'desc')
-        .limit(5);
+        .orderBy('report_date', 'desc');
     } catch (e) {
       recentPadtalReports = [];
     }

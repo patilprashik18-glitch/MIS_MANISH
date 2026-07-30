@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   LineChart,
   Line,
@@ -194,6 +194,7 @@ export default function DashboardChartHub({
           </ResponsiveContainer>
         );
 
+      case 'production_by_product':
       case 'product_mix_prod':
         return (
           <ResponsiveContainer width="99%" height={260}>
@@ -211,6 +212,7 @@ export default function DashboardChartHub({
           </ResponsiveContainer>
         );
 
+      case 'sales_by_product':
       case 'product_mix_sales':
         return (
           <ResponsiveContainer width="99%" height={260}>
@@ -225,6 +227,51 @@ export default function DashboardChartHub({
               <Legend />
               <Bar dataKey="amount" name="Revenue (₹)" fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
+          </ResponsiveContainer>
+        );
+
+      case 'salesman_performance':
+        return (
+          <ResponsiveContainer width="99%" height={260}>
+            <BarChart
+              data={data.salesmanSalesToday || []}
+              onClick={(pt) => handleChartClick(chart.title, pt)}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="salesman_name" tick={{ fontSize: 11 }} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="qtl" name="Sold (Qtl)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="amount" name="Revenue (₹)" fill="#10b981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        );
+
+      case 'moisture_tracking':
+        return (
+          <ResponsiveContainer width="99%" height={260}>
+            <LineChart data={trend} onClick={(pt) => handleChartClick(chart.title, pt)}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11 }}
+                tickFormatter={(t) =>
+                  new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                }
+              />
+              <YAxis />
+              <Tooltip labelFormatter={(l) => `Date: ${new Date(l).toLocaleDateString()}`} />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="moisture_avg"
+                name="Flour Moisture (%)"
+                stroke="#06b6d4"
+                strokeWidth={3}
+                dot={{ r: 4 }}
+              />
+            </LineChart>
           </ResponsiveContainer>
         );
 
@@ -246,6 +293,7 @@ export default function DashboardChartHub({
           </ResponsiveContainer>
         );
 
+      case 'lab_quality_index':
       case 'lab_quality':
         return (
           <ResponsiveContainer width="99%" height={260}>

@@ -332,6 +332,11 @@ router.get('/padtal/:date', async (req, res) => {
 });
 
 router.post('/padtal', async (req, res) => {
+    try {
+      await db.migrate.latest();
+    } catch (e) {
+      console.error('Auto migration check failed:', e);
+    }
     const trx = await db.transaction();
     try {
       const { report_date, parentData, yield_detail, expenses } = req.body;

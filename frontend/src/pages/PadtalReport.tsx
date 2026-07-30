@@ -26,6 +26,7 @@ export default function PadtalReport() {
   const [moistureAdjRate, setMoistureAdjRate] = useState(0.03);
   const [grindingExpense, setGrindingExpense] = useState(250);
   const [customMoistureAdj, setCustomMoistureAdj] = useState<number | null>(null);
+  const [customWheatNetRate, setCustomWheatNetRate] = useState<number | null>(null);
 
   const [yieldDetail, setYieldDetail] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -44,11 +45,14 @@ export default function PadtalReport() {
 
   // Editable & auto-calculated fields
   const wheatRateLess4 = wheatRate * (1 - wheatDiscountPercent / 100);
-  const autoMoistureAdj = (wheatRate * (moisturePercent / 100)) * moistureAdjRate;
+  const wheatNetAvgRate = customWheatNetRate !== null ? customWheatNetRate : (wheatRateLess4 > 0 ? wheatRateLess4 : 0);
+  const autoMoistureAdj = wheatNetAvgRate * (moisturePercent / 100);
   const moistureAdjustment = customMoistureAdj !== null ? customMoistureAdj : autoMoistureAdj;
 
   const realizationValue = yieldDetail.reduce((sum, item) => sum + (parseFloat(item.avg_rate) || 0), 0);
   const totalYieldPercent = yieldDetail.reduce((sum, item) => sum + (parseFloat(item.yield_percent) || 0), 0);
+  const diffValue = realizationValue - wheatNetAvgRate;
+  const finalMarginValue = diffValue - grindingExpense + moistureAdjustment;
   const finalRealizationRate = realizationValue - grindingExpense - moistureAdjustment;
   const differenceAmount = finalRealizationRate - wheatRateLess4;
   const differencePercent = wheatRateLess4 > 0 ? (differenceAmount / wheatRateLess4) * 100 : 0;
@@ -84,6 +88,9 @@ export default function PadtalReport() {
         const res = await api.get(`/reports/padtal/${reportDate}`);
         const r = res.data;
         setWheatRate(r.wheat_rate || 0);
+        if (r.wheat_net_avg_rate !== undefined) setCustomWheatNetRate(Number(r.wheat_net_avg_rate) || 0);
+        if (r.grinding_expense !== undefined) setGrindingExpense(Number(r.grinding_expense) || 250);
+        if (r.moisture_adjustment !== undefined) setCustomMoistureAdj(Number(r.moisture_adjustment) || null);
 
         if (r.yield_detail && r.yield_detail.length > 0) {
           setYieldDetail(prev => {
@@ -142,6 +149,9 @@ export default function PadtalReport() {
             try {
               const padData = JSON.parse(cachedPadtal);
               if (padData.wheat_rate) setWheatRate(Number(padData.wheat_rate) || 0);
+              if (padData.wheat_net_avg_rate) setCustomWheatNetRate(Number(padData.wheat_net_avg_rate) || 0);
+              if (padData.grinding_expense !== undefined) setGrindingExpense(Number(padData.grinding_expense) || 250);
+              if (padData.moisture_adjustment !== undefined) setCustomMoistureAdj(Number(padData.moisture_adjustment) || null);
               if (padData.yield_detail && padData.yield_detail.length > 0) {
                 setYieldDetail(prev => {
                   const newState = [...prev];
@@ -152,10 +162,10 @@ export default function PadtalReport() {
                       return cleanS.includes(cleanP) || cleanP.includes(cleanS);
                     });
                     if (idx !== -1) {
-                      newState[idx].yield_percent = pItem.yield_percent || newState[idx].yield_percent;
-                      newState[idx].rate_per_bag = pItem.rate_per_bag || newState[idx].rate_per_bag;
-                      newState[idx].rate_per_kg = pItem.rate_per_kg || newState[idx].rate_per_kg;
-                      newState[idx].avg_rate = pItem.avg_rate || newState[idx].avg_rate;
+                      newState[idx].yield_percent = pItem.yield_percent !== undefined ? pItem.yield_percent : newState[idx].yield_percent;
+                      newState[idx].rate_per_bag = pItem.rate_per_bag !== undefined ? pItem.rate_per_bag : newState[idx].rate_per_bag;
+                      newState[idx].rate_per_kg = pItem.rate_per_kg !== undefined ? pItem.rate_per_kg : newState[idx].rate_per_kg;
+                      newState[idx].avg_rate = pItem.avg_rate !== undefined ? pItem.avg_rate : newState[idx].avg_rate;
                     } else if (pItem.product_name) {
                       newState.push({
                         product_id: 0,
@@ -188,7 +198,14 @@ export default function PadtalReport() {
     try {
       await api.post('/reports/padtal', {
         report_date: reportDate,
-        parentData: { wheat_rate: wheatRate, difference_percent: differencePercent },
+        parentData: {
+          wheat_rate: wheatRate,
+          wheat_net_avg_rate: wheatNetAvgRate,
+          grinding_expense: grindingExpense,
+          moisture_adjustment: moistureAdjustment,
+          final_margin: finalMarginValue,
+          difference_percent: differencePercent
+        },
         yield_detail: yieldDetail,
         expenses: expenses
       });
@@ -242,6 +259,15 @@ export default function PadtalReport() {
         if (parsed.parentData && parsed.parentData.wheat_rate) {
           setWheatRate(Number(parsed.parentData.wheat_rate) || 0);
         }
+        if (parsed.padtal_data.wheat_net_avg_rate) {
+          setCustomWheatNetRate(Number(parsed.padtal_data.wheat_net_avg_rate) || 0);
+        }
+        if (parsed.padtal_data.grinding_expense !== undefined) {
+          setGrindingExpense(Number(parsed.padtal_data.grinding_expense) || 250);
+        }
+        if (parsed.padtal_data.moisture_adjustment !== undefined) {
+          setCustomMoistureAdj(Number(parsed.padtal_data.moisture_adjustment) || null);
+        }
         if (parsed.padtal_data.yield_detail && parsed.padtal_data.yield_detail.length > 0) {
           setYieldDetail(prev => {
             const newState = [...prev];
@@ -252,10 +278,10 @@ export default function PadtalReport() {
                 return cleanS.includes(cleanP) || cleanP.includes(cleanS);
               });
               if (idx !== -1) {
-                newState[idx].yield_percent = pItem.yield_percent || newState[idx].yield_percent;
-                newState[idx].rate_per_bag = pItem.rate_per_bag || newState[idx].rate_per_bag;
-                newState[idx].rate_per_kg = pItem.rate_per_kg || newState[idx].rate_per_kg;
-                newState[idx].avg_rate = pItem.avg_rate || newState[idx].avg_rate;
+                newState[idx].yield_percent = pItem.yield_percent !== undefined ? pItem.yield_percent : newState[idx].yield_percent;
+                newState[idx].rate_per_bag = pItem.rate_per_bag !== undefined ? pItem.rate_per_bag : newState[idx].rate_per_bag;
+                newState[idx].rate_per_kg = pItem.rate_per_kg !== undefined ? pItem.rate_per_kg : newState[idx].rate_per_kg;
+                newState[idx].avg_rate = pItem.avg_rate !== undefined ? pItem.avg_rate : newState[idx].avg_rate;
               } else if (pItem.product_name) {
                 newState.push({
                   product_id: 0,
@@ -487,6 +513,77 @@ export default function PadtalReport() {
                     <td className="p-2 text-right text-base font-black text-primary">₹{realizationValue.toFixed(2)}</td>
                     <td className="p-2"></td>
                   </tr>
+                  <tr className="bg-surface-container-lowest border-t border-outline-variant/40 text-xs sm:text-sm font-semibold">
+                    <td colSpan={3} className="p-2 text-left uppercase text-gray-500 font-bold">
+                      NOTE :- WHEAT & ATTA MAIDA AVG RATE TILL DATE {new Date(reportDate).toLocaleDateString('en-GB')}
+                    </td>
+                    <td className="p-2 text-right uppercase font-bold text-gray-700">WHEAT NET AVG RATE</td>
+                    <td className="p-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <span>₹</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={wheatNetAvgRate}
+                          onChange={(e) => setCustomWheatNetRate(parseFloat(e.target.value) || 0)}
+                          className="w-24 text-right p-1 border rounded bg-white font-bold text-on-surface"
+                        />
+                      </div>
+                    </td>
+                    <td className="p-2"></td>
+                  </tr>
+                  <tr className="bg-surface-container-lowest border-t border-outline-variant/40 text-xs sm:text-sm font-semibold">
+                    <td colSpan={3} className="p-2"></td>
+                    <td className="p-2 text-right uppercase font-bold text-gray-700">DIFFRENCE</td>
+                    <td className={`p-2 text-right font-black text-base ${diffValue >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                      ₹{diffValue.toFixed(2)}
+                    </td>
+                    <td className="p-2"></td>
+                  </tr>
+                  <tr className="bg-surface-container-lowest border-t border-outline-variant/40 text-xs sm:text-sm font-semibold">
+                    <td colSpan={3} className="p-2"></td>
+                    <td className="p-2 text-right uppercase font-bold text-gray-700">GRD EXP.</td>
+                    <td className="p-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <span>₹</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={grindingExpense}
+                          onChange={(e) => setGrindingExpense(parseFloat(e.target.value) || 0)}
+                          className="w-24 text-right p-1 border rounded bg-white font-bold text-on-surface"
+                        />
+                      </div>
+                    </td>
+                    <td className="p-2"></td>
+                  </tr>
+                  <tr className="bg-surface-container-lowest border-t border-outline-variant/40 text-xs sm:text-sm font-semibold">
+                    <td colSpan={3} className="p-2"></td>
+                    <td className="p-2 text-right uppercase font-bold text-gray-700">MOISTURE @ 3%</td>
+                    <td className="p-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <span>₹</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={moistureAdjustment.toFixed(2)}
+                          onChange={(e) => setCustomMoistureAdj(parseFloat(e.target.value) || 0)}
+                          className="w-24 text-right p-1 border rounded bg-white font-bold text-on-surface"
+                        />
+                      </div>
+                    </td>
+                    <td className="p-2"></td>
+                  </tr>
+                  <tr className="bg-surface-container-low border-t-2 border-outline-variant/60 text-sm sm:text-base font-extrabold">
+                    <td colSpan={3} className="p-2"></td>
+                    <td className="p-2 text-right uppercase font-black text-gray-900">FINAL</td>
+                    <td className="p-2 text-right">
+                      <div className="inline-block bg-[#ffff00] text-black font-black text-right px-2.5 py-1 rounded border border-yellow-500 shadow text-base sm:text-lg">
+                        ₹{finalMarginValue.toFixed(2)}
+                      </div>
+                    </td>
+                    <td className="p-2"></td>
+                  </tr>
                 </tfoot>
               </table>
               <div className="p-3 border-t bg-surface-container-lowest flex justify-end">
@@ -509,15 +606,27 @@ export default function PadtalReport() {
                 <span className="font-semibold">₹{wheatRateLess4.toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
+                <span className="text-gray-600 font-bold">Wheat Net Avg Rate</span>
+                <span className="font-bold text-gray-800">₹{wheatNetAvgRate.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
                 <span className="text-gray-600">Realization Value</span>
                 <span className="font-semibold text-green-600">₹{realizationValue.toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
+                <span className="text-gray-600 font-bold">Difference (Realization - Wheat)</span>
+                <span className={`font-bold ${diffValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>₹{diffValue.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
                 <div>
-                  <span className="text-gray-600 block">Grinding Exp + Moisture Adj</span>
-                  <span className="text-[11px] text-gray-400">(Grinding ₹{grindingExpense} + Moisture ₹{moistureAdjustment.toFixed(2)})</span>
+                  <span className="text-gray-600 block">Grinding Exp + Moisture @ 3%</span>
+                  <span className="text-[11px] text-gray-400">(Grinding ₹{grindingExpense} | Moisture ₹{moistureAdjustment.toFixed(2)})</span>
                 </div>
-                <span className="font-semibold text-red-600">₹{(grindingExpense + moistureAdjustment).toFixed(2)}</span>
+                <span className="font-semibold text-red-600">₹{(grindingExpense - moistureAdjustment).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b">
+                <span className="text-gray-800 font-extrabold uppercase">FINAL</span>
+                <span className="inline-block bg-[#ffff00] text-black font-black px-2.5 py-0.5 rounded border border-yellow-500 shadow text-base">₹{finalMarginValue.toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
                 <span className="text-gray-600">Final Realization Rate</span>
